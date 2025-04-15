@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SubtitleItem } from "@/components/SubtitleTranslator";
 import { useI18n } from "@/lib/i18n/I18nContext";
+import { Upload, Clock } from "lucide-react";
 
 interface SubtitlePreviewProps {
   subtitles: SubtitleItem[];
@@ -20,20 +21,183 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
   const [currentTime, setCurrentTime] = useState(0);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [subtitleMode, setSubtitleMode] = useState<"translated" | "bilingual" | "original">("translated");
-  const [currentSubtitle, setCurrentSubtitle] = useState<SubtitleItem | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [videoName, setVideoName] = useState<string>("");
+  const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [vttUrl, setVttUrl] = useState<string | null>(null);
+  const [originalVttUrl, setOriginalVttUrl] = useState<string | null>(null);
+  const [bilingualVttUrl, setBilingualVttUrl] = useState<string | null>(null);
+
+  // Hàm chuyển đổi phụ đề sang định dạng WebVTT
+  const convertSubtitlesToVTT = (
+    subtitles: SubtitleItem[], 
+    mode: "translated" | "bilingual" | "original" = "translated"
+  ): string => {
+    // Header của WebVTT
+    let vttContent = "WEBVTT\n\n";
+    
+    // Thêm từng phụ đề
+    subtitles.forEach(subtitle => {
+      // Chuyển đổi định dạng thời gian từ SRT (00:00:00,000) sang VTT (00:00:00.000)
+      const startTime = subtitle.startTime.replace(',', '.');
+      const endTime = subtitle.endTime.replace(',', '.');
+      
+      let text = '';
+      if (mode === "original") {
+        text = subtitle.text;
+      } else if (mode === "translated") {
+        text = subtitle.translatedText || subtitle.text;
+      } else if (mode === "bilingual") {
+        text = `${subtitle.text}\n${subtitle.translatedText || (isTranslating ? t('subtitleTable.translating') : t('subtitleTable.waitingToTranslate'))}`;
+      }
+      
+      // Định dạng chuỗi VTT cho phụ đề này
+      vttContent += `${subtitle.id}\n${startTime} --> ${endTime}\n${text}\n\n`;
+    });
+    
+    return vttContent;
+  };
+
+  // Tạo URL cho file VTT
+  const createVTTUrl = (content: string): string => {
+    const blob = new Blob([content], { type: 'text/vtt' });
+    return URL.createObjectURL(blob);
+  };
+
+  // Cập nhật VTT URLs khi subtitles hoặc mode thay đổi
+  useEffect(() => {
+    if (subtitles.length > 0) {
+      // Revoke các URL cũ để tránh rò rỉ bộ nhớ
+      if (vttUrl) URL.revokeObjectURL(vttUrl);
+      if (originalVttUrl) URL.revokeObjectURL(originalVttUrl);
+      if (bilingualVttUrl) URL.revokeObjectURL(bilingualVttUrl);
+      
+      // Tạo các URL mới cho từng mode
+      const translatedVtt = convertSubtitlesToVTT(subtitles, "translated");
+      const originalVtt = convertSubtitlesToVTT(subtitles, "original");
+      const bilingualVtt = convertSubtitlesToVTT(subtitles, "bilingual");
+      
+      setVttUrl(createVTTUrl(translatedVtt));
+      setOriginalVttUrl(createVTTUrl(originalVtt));
+      setBilingualVttUrl(createVTTUrl(bilingualVtt));
+    }
+    
+    // Clean up function để revoke URLs khi component unmount
+    return () => {
+      if (vttUrl) URL.revokeObjectURL(vttUrl);
+      if (originalVttUrl) URL.revokeObjectURL(originalVttUrl);
+      if (bilingualVttUrl) URL.revokeObjectURL(bilingualVttUrl);
+    };
+  }, [subtitles, subtitleMode, isTranslating, t]);
+
+  // Cập nhật track khi subtitleMode thay đổi
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    // Xóa tất cả track hiện tại
+    while (videoRef.current.textTracks.length > 0) {
+      try {
+        const track = videoRef.current.querySelector('track');
+        if (track) track.remove();
+      } catch (e) {
+        console.error("Error removing tracks:", e);
+        break;
+      }
+    }
+    
+    // Nếu đang ẩn phụ đề, không thêm track mới
+    if (!showSubtitles) return;
+    
+    // Thêm track mới dựa trên mode được chọn
+    if (videoRef.current && subtitles.length > 0) {
+      const track = document.createElement('track');
+      track.kind = 'subtitles';
+      track.label = 'Subtitles';
+      track.default = true;
+      
+      if (subtitleMode === "translated" && vttUrl) {
+        track.src = vttUrl;
+      } else if (subtitleMode === "original" && originalVttUrl) {
+        track.src = originalVttUrl;
+      } else if (subtitleMode === "bilingual" && bilingualVttUrl) {
+        track.src = bilingualVttUrl;
+      }
+      
+      videoRef.current.appendChild(track);
+      
+      // Kích hoạt track
+      setTimeout(() => {
+        if (videoRef.current && videoRef.current.textTracks[0]) {
+          videoRef.current.textTracks[0].mode = 'showing';
+        }
+      }, 100);
+    }
+  }, [subtitleMode, showSubtitles, vttUrl, originalVttUrl, bilingualVttUrl, subtitles.length]);
 
   // Xử lý khi người dùng chọn video
   const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    handleVideoFile(file);
+  };
+
+  // Xử lý file video
+  const handleVideoFile = (file: File) => {
+    // Kiểm tra loại file
+    if (!file.type.startsWith('video/')) {
+      alert(t('preview.invalidVideoType'));
+      return;
+    }
+
     // Rút lại URL cũ để tránh rò rỉ bộ nhớ
     if (videoUrl) {
       URL.revokeObjectURL(videoUrl);
     }
 
+    setLoading(true);
+    setVideoName(file.name);
     const newUrl = URL.createObjectURL(file);
     setVideoUrl(newUrl);
+  };
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      handleVideoFile(files[0]);
+    }
+  };
+
+  // Xử lý khi video metadata được load
+  const handleVideoLoaded = () => {
+    setLoading(false);
+    if (videoRef.current) {
+      setVideoDuration(videoRef.current.duration);
+    }
   };
 
   // Cập nhật thời gian hiện tại của video khi phát
@@ -43,22 +207,6 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
     }
   };
 
-  // Tìm phụ đề hiện tại dựa trên thời gian video
-  useEffect(() => {
-    if (!subtitles.length || !showSubtitles) {
-      setCurrentSubtitle(null);
-      return;
-    }
-
-    const found = subtitles.find(subtitle => {
-      const startSeconds = timeToSeconds(subtitle.startTime);
-      const endSeconds = timeToSeconds(subtitle.endTime);
-      return currentTime >= startSeconds && currentTime <= endSeconds;
-    });
-
-    setCurrentSubtitle(found || null);
-  }, [currentTime, subtitles, showSubtitles]);
-
   // Chuyển đổi thời gian từ định dạng "00:00:00,000" sang giây
   const timeToSeconds = (timeString: string): number => {
     const [time, milliseconds] = timeString.split(',');
@@ -66,94 +214,116 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
     return hours * 3600 + minutes * 60 + seconds + Number(milliseconds) / 1000;
   };
 
-  // Render phụ đề dựa trên chế độ đã chọn
-  const renderSubtitleText = () => {
-    if (!currentSubtitle) return null;
-
-    switch (subtitleMode) {
-      case "original":
-        return <div>{currentSubtitle.text}</div>;
-      case "translated":
-        return currentSubtitle.translatedText ? (
-          <div>{currentSubtitle.translatedText}</div>
-        ) : (
-          <div className="text-gray-400">{currentSubtitle.text}</div>
-        );
-      case "bilingual":
-        return (
-          <>
-            <div className="mb-1 text-gray-300">{currentSubtitle.text}</div>
-            <div className="font-medium">
-              {currentSubtitle.translatedText || 
-                <span className="text-gray-400 italic">
-                  {isTranslating ? t('subtitleTable.translating') : t('subtitleTable.waitingToTranslate')}
-                </span>
-              }
-            </div>
-          </>
-        );
-    }
+  // Format thời gian từ giây sang định dạng hh:mm:ss
+  const formatTime = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
   };
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-3">
-        <CardTitle>{t('preview.title')}</CardTitle>
-        <CardDescription>{t('preview.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Input
+    <div className="space-y-3">
+      <div 
+        className={`border-2 rounded-md transition-colors relative ${
+          isDragging ? "border-blue-400 bg-blue-50" : "border-gray-200 border-dashed"
+        }`}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        <div className="p-3 text-center">
+          <input
             type="file"
+            id="video-upload"
             accept="video/*"
             onChange={handleVideoUpload}
-            className="flex-1"
+            className="hidden"
           />
-          <Button 
-            onClick={() => setShowSubtitles(!showSubtitles)}
-            variant="outline"
-            size="sm"
+          <label 
+            htmlFor="video-upload" 
+            className="cursor-pointer flex flex-col items-center justify-center py-2"
           >
-            {showSubtitles ? t('preview.hideSubtitles') : t('preview.showSubtitles')}
-          </Button>
+            <Upload className="h-5 w-5 mb-1 text-gray-400" />
+            <p className="text-sm text-gray-500">
+              {isDragging ? t('preview.dropVideoHere') : t('preview.dragAndDropVideo')}
+            </p>
+            <p className="text-xs text-gray-400 mt-1">{t('fileUpload.orClickToSelect')}</p>
+          </label>
         </div>
+      </div>
 
-        {subtitles.length > 0 && (
-          <div className="mb-2">
-            <Tabs defaultValue="translated" onValueChange={(v: string) => setSubtitleMode(v as "translated" | "bilingual" | "original")}>
-              <TabsList className="grid grid-cols-3 mb-2">
-                <TabsTrigger value="translated">{t('preview.translatedOnly')}</TabsTrigger>
-                <TabsTrigger value="bilingual">{t('preview.bilingual')}</TabsTrigger>
-                <TabsTrigger value="original">{t('preview.originalOnly')}</TabsTrigger>
-              </TabsList>
-            </Tabs>
+      <div className="flex justify-between items-center">
+        {videoName && (
+          <div className="text-xs flex items-center px-2 py-1 bg-gray-50 rounded-md flex-1 mr-2">
+            <div className="font-medium truncate">
+              <span className="text-gray-500 mr-1">{t('preview.videoName')}</span> {videoName}
+            </div>
+            {videoDuration > 0 && (
+              <div className="flex items-center gap-1 text-gray-500 ml-2 flex-shrink-0">
+                <span className="text-gray-500 mr-1">{t('preview.videoDuration')}</span>
+                <Clock size={12} />
+                <span>{formatTime(videoDuration)}</span>
+              </div>
+            )}
           </div>
         )}
+        
+        <Button 
+          onClick={() => setShowSubtitles(!showSubtitles)}
+          variant="outline"
+          size="sm"
+          className="whitespace-nowrap"
+        >
+          {showSubtitles ? t('preview.hideSubtitles') : t('preview.showSubtitles')}
+        </Button>
+      </div>
 
-        <div className="relative rounded-md overflow-hidden bg-black aspect-video">
-          {videoUrl ? (
+      {subtitles.length > 0 && (
+        <div>
+          <Tabs defaultValue="translated" onValueChange={(v: string) => setSubtitleMode(v as "translated" | "bilingual" | "original")}>
+            <TabsList className="grid grid-cols-3 w-full">
+              <TabsTrigger value="translated">{t('preview.translatedOnly')}</TabsTrigger>
+              <TabsTrigger value="bilingual">{t('preview.bilingual')}</TabsTrigger>
+              <TabsTrigger value="original">{t('preview.originalOnly')}</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+
+      <div className="relative rounded-md overflow-hidden bg-black aspect-video">
+        {videoUrl ? (
+          <>
             <video
               ref={videoRef}
               src={videoUrl}
               controls
+              crossOrigin="anonymous"
               className="w-full h-full"
               onTimeUpdate={handleTimeUpdate}
+              onLoadedMetadata={handleVideoLoaded}
+              onLoadedData={handleVideoLoaded}
             />
-          ) : (
-            <div className="flex items-center justify-center h-full text-white">
-              {t('preview.uploadVideo')}
-            </div>
-          )}
-
-          {showSubtitles && currentSubtitle && (
-            <div className="absolute bottom-14 left-0 right-0 p-2 text-center text-white text-lg font-medium">
-              <div className="bg-black bg-opacity-60 p-2 rounded inline-block max-w-[80%]">
-                {renderSubtitleText()}
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+                <span className="text-white ml-2">{t('preview.loadingVideo')}</span>
               </div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-white p-4">
+            <Upload className="h-8 w-8 mb-2 opacity-60" />
+            <p className="text-center opacity-80">{t('preview.uploadVideo')}</p>
+          </div>
+        )}
+      </div>
+      <div className="text-xs text-gray-500 text-center">
+        {showSubtitles && subtitles.length > 0 && (
+          <p>{t('preview.fullScreenSubtitleTip')}</p>
+        )}
+      </div>
+    </div>
   );
 } 

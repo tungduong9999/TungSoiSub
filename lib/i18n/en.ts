@@ -117,6 +117,14 @@ const en = {
     translatedOnly: "Translated",
     bilingual: "Bilingual",
     originalOnly: "Original",
+    loadingVideo: "Loading video...",
+    videoName: "Video name:",
+    videoDuration: "Duration:",
+    selectVideo: "Select video",
+    dropVideoHere: "Drop your video file here...",
+    invalidVideoType: "Invalid file type. Please select a video file.",
+    dragAndDropVideo: "Drag and drop a video file here",
+    fullScreenSubtitleTip: "Subtitles will remain visible in fullscreen mode."
   },
 };
 

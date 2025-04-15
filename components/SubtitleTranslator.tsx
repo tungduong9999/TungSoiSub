@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { saveAs } from "file-saver";
-import { ChevronDown, ChevronUp, Globe, AlertCircle, PauseCircle, PlayCircle, StopCircle, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Globe, AlertCircle, PauseCircle, PlayCircle, StopCircle, X, Maximize, Minimize, Eye, EyeOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nContext";
 import SubtitlePreview from "@/components/SubtitlePreview";
 
@@ -66,6 +66,8 @@ export default function SubtitleTranslator() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const [dragCounter, setDragCounter] = useState<number>(0);
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState<boolean>(false);
+  const [layoutMode, setLayoutMode] = useState<'default' | 'sidebyside'>('default');
 
   // Cập nhật pauseStateRef khi isPaused thay đổi
   useEffect(() => {
@@ -91,6 +93,24 @@ export default function SubtitleTranslator() {
     // Ghi nhớ ngôn ngữ hiện tại cho lần thay đổi tiếp theo
     setPreviousLanguage(targetLanguage);
   }, [targetLanguage, subtitles.length, previousLanguage]);
+
+  // Kiểm tra nếu màn hình đủ lớn để sử dụng layout side-by-side
+  useEffect(() => {
+    const checkScreenSize = () => {
+      if (typeof window !== 'undefined') {
+        setLayoutMode(window.innerWidth >= 1600 ? 'sidebyside' : 'default');
+      }
+    };
+    
+    // Kiểm tra khi component mount
+    checkScreenSize();
+    
+    // Thêm event listener để kiểm tra khi resize
+    window.addEventListener('resize', checkScreenSize);
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   // Xử lý khi người dùng cung cấp API key
   const handleApiKeyChange = (apiKey: string) => {
@@ -849,281 +869,367 @@ export default function SubtitleTranslator() {
             </div>
           )}
 
-          {/* File Upload and Settings */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* File Upload */}
-            <Card className="lg:col-span-1">
-              <CardHeader className="pb-3">
-                <CardTitle>{t('fileUpload.title')}</CardTitle>
-                <CardDescription>{t('fileUpload.description')}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div
-                    ref={dropZoneRef}
-                    className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-colors
-                      ${isDragging ? 'border-blue-400 bg-blue-50/50' : ''}
-                      ${validationError && !file ? 'border-rose-300 bg-rose-50/50' : 'border-gray-300 hover:bg-gray-50'}
-                    `}
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragEnter={handleDragEnter}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".srt"
-                      className="hidden"
-                      onChange={handleFileChange}
-                      disabled={translating}
-                    />
-                    <div className="text-sm text-gray-500">
-                      {isDragging ? (
-                        <p className="text-blue-500 font-medium">{t('fileUpload.dropFileHere')}</p>
-                      ) : (
-                        t('fileUpload.dragAndDrop')
-                      )}
-                    </div>
-                  </div>
-
-                  {file && (
-                    <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
-                      <div className="truncate">
-                        <span className="font-medium">{t('fileUpload.fileSelected')}</span> {fileName}
+          {/* Layout Container - Side by Side or Stacked */}
+          <div className={`${layoutMode === 'sidebyside' ? 'flex gap-4' : ''}`}>
+            {/* Left Column - File Upload, Settings and Table */}
+            <div className={`${layoutMode === 'sidebyside' ? 'w-3/5' : 'w-full'} space-y-4`}>
+              {/* File Upload and Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* File Upload */}
+                <Card className="md:col-span-1">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>{t('fileUpload.title')}</CardTitle>
+                        <CardDescription>{t('fileUpload.description')}</CardDescription>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="ml-2 h-7 text-xs"
-                        onClick={handleClearFile}
-                        disabled={translating}
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8"
+                        onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
                       >
-                        {t('fileUpload.clearFile')}
+                        {isSettingsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                       </Button>
                     </div>
+                  </CardHeader>
+                  {!isSettingsCollapsed && (
+                    <CardContent>
+                      <div className="space-y-2">
+                        <div
+                          ref={dropZoneRef}
+                          className={`border-2 border-dashed rounded-md p-4 sm:p-6 text-center cursor-pointer transition-colors
+                            ${isDragging ? 'border-blue-400 bg-blue-50/50' : ''}
+                            ${validationError && !file ? 'border-rose-300 bg-rose-50/50' : 'border-gray-300 hover:bg-gray-50'}
+                          `}
+                          onClick={() => fileInputRef.current?.click()}
+                          onDragEnter={handleDragEnter}
+                          onDragOver={handleDragOver}
+                          onDragLeave={handleDragLeave}
+                          onDrop={handleDrop}
+                        >
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".srt"
+                            className="hidden"
+                            onChange={handleFileChange}
+                            disabled={translating}
+                          />
+                          <div className="text-sm text-gray-500">
+                            {isDragging ? (
+                              <p className="text-blue-500 font-medium">{t('fileUpload.dropFileHere')}</p>
+                            ) : (
+                              <div>
+                                <p>{t('fileUpload.dragAndDropHere')}</p>
+                                <p className="text-xs mt-1 text-gray-400">{t('fileUpload.orClickToSelect')}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {file && (
+                          <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
+                            <div className="truncate">
+                              <span className="font-medium">{t('fileUpload.fileSelected')}</span> {fileName}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-2 h-7 text-xs"
+                              onClick={handleClearFile}
+                              disabled={translating}
+                            >
+                              {t('fileUpload.clearFile')}
+                            </Button>
+                          </div>
+                        )}
+
+                        {validationError && !file && (
+                          <div className="text-xs text-rose-600 flex items-center">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            {validationError}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  )}
+                  {isSettingsCollapsed && file && (
+                    <CardContent>
+                      <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
+                        <div className="truncate">
+                          <span className="font-medium">{t('fileUpload.fileSelected')}</span> {fileName}
+                        </div>
+                      </div>
+                    </CardContent>
+                  )}
+                  {isSettingsCollapsed && !file && (
+                    <CardContent>
+                      <div className="text-sm text-gray-500 text-center py-2">
+                        {t('fileUpload.noFileSelected')}
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+
+                {/* Translation Settings */}
+                <Card className="md:col-span-2">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>{t('translationSettings.title')}</CardTitle>
+                        <CardDescription>{t('translationSettings.description')}</CardDescription>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => setLayoutMode(layoutMode === 'default' ? 'sidebyside' : 'default')}
+                          title={layoutMode === 'default' ? 'Chế độ song song' : 'Chế độ mặc định'}
+                        >
+                          {layoutMode === 'default' ? <Maximize className="h-4 w-4" /> : <Minimize className="h-4 w-4" />}
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
+                        >
+                          {isSettingsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+
+                  {!isSettingsCollapsed && (
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            {t('translationSettings.targetLanguage')}
+                          </label>
+                          <LanguageSelector 
+                            value={targetLanguage} 
+                            onChange={setTargetLanguage} 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium text-gray-700">
+                            {t('translationSettings.customPrompt')}
+                          </label>
+                          <Textarea 
+                            value={customPrompt}
+                            onChange={(e) => setCustomPrompt(e.target.value)}
+                            className="min-h-[80px] resize-y max-h-[200px] custom-scrollbar"
+                            disabled={translating}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Translation Buttons */}
+                      <div className="flex justify-between">
+                        <div className="flex-1 flex items-center">
+                          {subtitles.length > 0 && (
+                            <div className="text-sm text-gray-500">
+                              {formatParams(t('fileUpload.successfullyParsed'), { count: subtitles.length })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {translating && (
+                            <>
+                              <Button 
+                                variant="outline" 
+                                onClick={handlePauseResume}
+                                className="flex items-center gap-1"
+                              >
+                                {isPaused ? (
+                                  <>
+                                    <PlayCircle className="h-4 w-4" />
+                                    {t('common.resume')}
+                                  </>
+                                ) : (
+                                  <>
+                                    <PauseCircle className="h-4 w-4" />
+                                    {t('common.pause')}
+                                  </>
+                                )}
+                              </Button>
+                              <Button 
+                                variant="destructive"
+                                onClick={handleStop}
+                                className="flex items-center gap-1"
+                              >
+                                <StopCircle className="h-4 w-4" />
+                                {t('common.stop')}
+                              </Button>
+                            </>
+                          )}
+                          {!translating && (
+                            <Button 
+                              onClick={handleTranslate} 
+                              disabled={!file || subtitles.length === 0}
+                              className="flex items-center gap-1"
+                            >
+                              <Globe className="h-4 w-4" />
+                              {t('translationSettings.startTranslation')}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
                   )}
 
-                  {validationError && !file && (
-                    <div className="text-xs text-rose-600 flex items-center">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      {validationError}
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Translation Settings */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <CardTitle>{t('translationSettings.title')}</CardTitle>
-                    <CardDescription>{t('translationSettings.description')}</CardDescription>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8"
-                    onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
-                  >
-                    {isSettingsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </CardHeader>
-
-              {!isSettingsCollapsed && (
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        {t('translationSettings.targetLanguage')}
-                      </label>
-                      <LanguageSelector 
-                        value={targetLanguage} 
-                        onChange={setTargetLanguage} 
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        {t('translationSettings.customPrompt')}
-                      </label>
-                      <Textarea 
-                        value={customPrompt}
-                        onChange={(e) => setCustomPrompt(e.target.value)}
-                        className="min-h-[80px] resize-y max-h-[200px] custom-scrollbar"
-                        disabled={translating}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Translation Buttons */}
-                  <div className="flex justify-between">
-                    <div className="flex-1 flex items-center">
-                      {subtitles.length > 0 && (
-                        <div className="text-sm text-gray-500">
-                          {formatParams(t('fileUpload.successfullyParsed'), { count: subtitles.length })}
+                  {translating && (
+                    <CardFooter className="pt-2 border-t">
+                      {isPaused ? (
+                        <div className="w-full">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="text-sm font-medium text-amber-600">
+                              {t('translationSettings.translationPaused')}
+                            </div>
+                            <div className="text-sm text-gray-500">{translationProgress}%</div>
+                          </div>
+                          <LoadingIndicator progress={translationProgress} isPaused={isPaused} />
+                          <div className="mt-2 text-xs text-amber-600 px-2 py-1 bg-amber-50 border border-amber-100 rounded-md">
+                            {t('translationSettings.translationPaused')}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full">
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="text-sm font-medium text-blue-600">
+                              {t('translationSettings.translationInProgress')}
+                            </div>
+                            <div className="text-sm text-gray-500">{translationProgress}%</div>
+                          </div>
+                          <LoadingIndicator progress={translationProgress} />
                         </div>
                       )}
+                    </CardFooter>
+                  )}
+                </Card>
+              </div>
+
+              {/* Batch Error Display */}
+              {failedBatches.length > 0 && (
+                <BatchErrorDisplay 
+                  failedBatches={failedBatches}
+                  onRetryBatch={handleRetryBatch}
+                  isProcessing={translating}
+                />
+              )}
+
+              {/* Subtitle Table */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>Subtitles</CardTitle>
+                      <CardDescription>View and edit translated subtitles</CardDescription>
                     </div>
-                    <div className="flex gap-2">
-                      {translating && (
-                        <>
-                          <Button 
-                            variant="outline" 
-                            onClick={handlePauseResume}
-                            className="flex items-center gap-1"
-                          >
-                            {isPaused ? (
-                              <>
-                                <PlayCircle className="h-4 w-4" />
-                                {t('common.resume')}
-                              </>
-                            ) : (
-                              <>
-                                <PauseCircle className="h-4 w-4" />
-                                {t('common.pause')}
-                              </>
-                            )}
-                          </Button>
-                          <Button 
-                            variant="destructive"
-                            onClick={handleStop}
-                            className="flex items-center gap-1"
-                          >
-                            <StopCircle className="h-4 w-4" />
-                            {t('common.stop')}
-                          </Button>
-                        </>
-                      )}
-                      {!translating && (
+                    {subtitles.length > 0 && (
+                      <div className="flex gap-2">
                         <Button 
-                          onClick={handleTranslate} 
-                          disabled={!file || subtitles.length === 0}
-                          className="flex items-center gap-1"
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => setIsSubtitleTableCollapsed(!isSubtitleTableCollapsed)}
                         >
-                          <Globe className="h-4 w-4" />
-                          {t('translationSettings.startTranslation')}
+                          {isSubtitleTableCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExport}
+                            disabled={!subtitles.some(s => s.status === "translated")}
+                            title={t('export.exportTranslated')}
+                          >
+                            {t('export.exportTranslated')}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleExportBilingual}
+                            disabled={!subtitles.some(s => s.status === "translated")}
+                            title={t('export.bilingualDescription')}
+                            className="whitespace-nowrap"
+                          >
+                            {t('export.exportBilingual')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                {!isSubtitleTableCollapsed && (
+                  <CardContent>
+                    {subtitles.length > 0 ? (
+                      <SubtitleTable
+                        subtitles={subtitles}
+                        onRetry={handleRetrySubtitle}
+                        onRetryBatch={handleRetryBatch}
+                        onUpdateTranslation={handleUpdateSubtitle}
+                        translating={translating}
+                      />
+                    ) : (
+                      <div className="text-center py-10 text-gray-500">
+                        {t('fileUpload.noFileSelected')}
+                      </div>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+            </div>
+
+            {/* Right Column - Video Preview (only shown in side-by-side mode or if not collapsed) */}
+            {(layoutMode === 'sidebyside' || !isPreviewCollapsed) && subtitles.length > 0 && (
+              <div className={`${layoutMode === 'sidebyside' ? 'w-2/5' : 'w-full mt-4'}`}>
+                <Card className="overflow-hidden">
+                  <CardHeader className="pb-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <CardTitle>{t('preview.title')}</CardTitle>
+                        <CardDescription>{t('preview.description')}</CardDescription>
+                      </div>
+                      {layoutMode !== 'sidebyside' && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8"
+                          onClick={() => setIsPreviewCollapsed(!isPreviewCollapsed)}
+                        >
+                          <EyeOff className="h-4 w-4" />
                         </Button>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              )}
-
-              {translating && (
-                <CardFooter className="pt-2 border-t">
-                  {isPaused ? (
-                    <div className="w-full">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="text-sm font-medium text-amber-600">
-                          {t('translationSettings.translationPaused')}
-                        </div>
-                        <div className="text-sm text-gray-500">{translationProgress}%</div>
-                      </div>
-                      <LoadingIndicator progress={translationProgress} isPaused={isPaused} />
-                      <div className="mt-2 text-xs text-amber-600 px-2 py-1 bg-amber-50 border border-amber-100 rounded-md">
-                        {t('translationSettings.translationPaused')}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="w-full">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="text-sm font-medium text-blue-600">
-                          {t('translationSettings.translationInProgress')}
-                        </div>
-                        <div className="text-sm text-gray-500">{translationProgress}%</div>
-                      </div>
-                      <LoadingIndicator progress={translationProgress} />
-                    </div>
-                  )}
-                </CardFooter>
-              )}
-            </Card>
-          </div>
-
-          {/* Batch Error Display */}
-          {failedBatches.length > 0 && (
-            <BatchErrorDisplay 
-              failedBatches={failedBatches}
-              onRetryBatch={handleRetryBatch}
-              isProcessing={translating}
-            />
-          )}
-
-          {/* Subtitle Table */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle>Subtitles</CardTitle>
-                  <CardDescription>View and edit translated subtitles</CardDescription>
-                </div>
-                {subtitles.length > 0 && (
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
-                      className="h-8 w-8"
-                      onClick={() => setIsSubtitleTableCollapsed(!isSubtitleTableCollapsed)}
-                    >
-                      {isSubtitleTableCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                    </Button>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExport}
-                        disabled={!subtitles.some(s => s.status === "translated")}
-                        title={t('export.exportTranslated')}
-                      >
-                        {t('export.exportTranslated')}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExportBilingual}
-                        disabled={!subtitles.some(s => s.status === "translated")}
-                        title={t('export.bilingualDescription')}
-                        className="whitespace-nowrap"
-                      >
-                        {t('export.exportBilingual')}
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  </CardHeader>
+                  <CardContent>
+                    <SubtitlePreview
+                      subtitles={subtitles}
+                      isTranslating={translating}
+                    />
+                  </CardContent>
+                </Card>
               </div>
-            </CardHeader>
-            {!isSubtitleTableCollapsed && (
-              <CardContent>
-                {subtitles.length > 0 ? (
-                  <SubtitleTable
-                    subtitles={subtitles}
-                    onRetry={handleRetrySubtitle}
-                    onRetryBatch={handleRetryBatch}
-                    onUpdateTranslation={handleUpdateSubtitle}
-                    translating={translating}
-                  />
-                ) : (
-                  <div className="text-center py-10 text-gray-500">
-                    {t('fileUpload.noFileSelected')}
-                  </div>
-                )}
-              </CardContent>
             )}
-          </Card>
-          
-          {/* Video Preview Section */}
-          {subtitles.length > 0 && (
-            <div className="mt-4">
-              <SubtitlePreview
-                subtitles={subtitles}
-                isTranslating={translating}
-              />
-            </div>
-          )}
+            
+            {/* Toggle button to show preview (only in stacked mode and when preview is collapsed) */}
+            {layoutMode !== 'sidebyside' && isPreviewCollapsed && subtitles.length > 0 && (
+              <div className="w-full mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsPreviewCollapsed(false)}
+                  className="w-full flex items-center justify-center gap-2 py-6"
+                >
+                  <Eye className="h-4 w-4" />
+                  {t('preview.title')}
+                </Button>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

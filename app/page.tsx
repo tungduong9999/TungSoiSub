@@ -18,20 +18,30 @@ export default function Home() {
   const { t } = useI18n();
   
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-3 md:p-6">
-      <div className="w-full max-w-6xl mx-auto">
-        <div className="flex flex-col items-center justify-center py-6 mb-3 relative">
-          <div className="absolute right-0 top-0">
+    <>
+      {/* Fixed header */}
+      <header className="sticky top-0 z-50 w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm transition-all duration-200">
+        <div className="container max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-800 transition-colors">
+              {t('common.appTitle')}
+            </h1>
+            <p className="text-sm text-gray-600 mt-0.5 transition-colors">
+              {t('common.appDescription')}
+            </p>
+          </div>
+          <div className="ml-4 flex-shrink-0">
             <LanguageSwitcher />
           </div>
-          <h1 className="text-3xl font-bold text-gray-800">{t('common.appTitle')}</h1>
-          <p className="text-gray-600 mt-2">
-            {t('common.appDescription')}
-          </p>
         </div>
-        
-        <SubtitleTranslator />
-      </div>
-    </main>
+      </header>
+
+      {/* Main content */}
+      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-3 md:p-6 pt-8">
+        <div className="w-full max-w-6xl mx-auto">
+          <SubtitleTranslator />
+        </div>
+      </main>
+    </>
   );
 }

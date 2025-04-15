@@ -117,6 +117,14 @@ const vi = {
     translatedOnly: "Bản dịch",
     bilingual: "Song ngữ",
     originalOnly: "Nguyên bản",
+    loadingVideo: "Đang tải video...",
+    videoName: "Tên video:",
+    videoDuration: "Thời lượng:",
+    selectVideo: "Chọn video",
+    dropVideoHere: "Thả video của bạn vào đây...",
+    invalidVideoType: "Loại tệp không hợp lệ. Vui lòng chọn tệp video.",
+    dragAndDropVideo: "Kéo và thả tệp video vào đây",
+    fullScreenSubtitleTip: "Phụ đề vẫn hiển thị trong chế độ toàn màn hình."
   },
 };
 
