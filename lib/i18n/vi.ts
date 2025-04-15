@@ -99,6 +99,8 @@ const vi = {
   },
   export: {
     exportTranslated: "Xuất SRT đã dịch",
+    exportBilingual: "Xuất phụ đề song ngữ",
+    bilingualDescription: "Xuất file SRT bao gồm cả phụ đề gốc và bản dịch",
     downloading: "Đang tải xuống...",
     noTranslatedSubtitles: "Không có phụ đề đã dịch để xuất."
   }

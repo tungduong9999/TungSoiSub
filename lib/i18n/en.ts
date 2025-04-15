@@ -99,6 +99,8 @@ const en = {
   },
   export: {
     exportTranslated: "Export Translated SRT",
+    exportBilingual: "Export Bilingual SRT",
+    bilingualDescription: "Export SRT with both original and translated subtitles",
     downloading: "Downloading...",
     noTranslatedSubtitles: "No translated subtitles to export."
   }

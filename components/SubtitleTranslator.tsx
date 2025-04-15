@@ -715,6 +715,40 @@ export default function SubtitleTranslator() {
     saveAs(blob, newFileName);
   };
 
+  // Export bilingual subtitles (original + translated)
+  const handleExportBilingual = () => {
+    if (!window || subtitles.length === 0 || !fileName) return;
+    
+    // Create SRT content with both original and translated text
+    const srtContent = stringify(subtitles.map(sub => {
+      // Skip subtitles that haven't been translated yet
+      if (sub.status !== "translated" || !sub.translatedText) {
+        return {
+          id: sub.id,
+          startTime: sub.startTime,
+          endTime: sub.endTime,
+          text: sub.text
+        };
+      }
+      
+      // Format as bilingual: original text followed by translated text
+      return {
+        id: sub.id,
+        startTime: sub.startTime,
+        endTime: sub.endTime,
+        text: `${sub.text}\n${sub.translatedText}`
+      };
+    }));
+    
+    // Generate file name for bilingual version
+    const origName = fileName.replace(/\.srt$/i, '');
+    const newFileName = `${origName}_bilingual_${targetLanguage.toLowerCase()}.srt`;
+    
+    // Create and download the file
+    const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+    saveAs(blob, newFileName);
+  };
+
   // Update subtitle manually
   const handleUpdateSubtitle = (id: number, translatedText: string) => {
     setSubtitles(prevSubtitles => 
@@ -1036,14 +1070,27 @@ export default function SubtitleTranslator() {
                     >
                       {isSubtitleTableCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleExport}
-                      disabled={!subtitles.some(s => s.status === "translated")}
-                    >
-                      {t('export.exportTranslated')}
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExport}
+                        disabled={!subtitles.some(s => s.status === "translated")}
+                        title={t('export.exportTranslated')}
+                      >
+                        {t('export.exportTranslated')}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportBilingual}
+                        disabled={!subtitles.some(s => s.status === "translated")}
+                        title={t('export.bilingualDescription')}
+                        className="whitespace-nowrap"
+                      >
+                        {t('export.exportBilingual')}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
