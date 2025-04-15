@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, CheckCircle2, Key, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nContext";
 
 // Tên key để lưu trong localStorage
 const STORAGE_KEY = "gemini_api_key";
@@ -15,6 +16,7 @@ interface ApiKeyInputProps {
 }
 
 export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
+  const { t } = useI18n();
   const [apiKey, setApiKey] = useState<string>("");
   const [saveKey, setSaveKey] = useState<boolean>(false);
   const [isKeyValid, setIsKeyValid] = useState<boolean | null>(null);
@@ -111,15 +113,15 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
         <div className="flex items-start gap-3">
           <Key className="w-5 h-5 text-blue-500 mt-1" />
           <div>
-            <h2 className="text-lg font-medium">Gemini API Key</h2>
+            <h2 className="text-lg font-medium">{t('apiKey.title')}</h2>
             {isKeyValid === true && isCollapsed ? (
               <p className="text-sm text-green-600 flex items-center">
                 <CheckCircle2 className="h-4 w-4 mr-1" />
-                API key configured and ready to use
+                {t('apiKey.configuredAndReady')}
               </p>
             ) : (
               <p className="text-sm text-gray-500">
-                Enter your Gemini API key to translate subtitles. 
+                {t('apiKey.description')}
                 <a 
                   href="https://aistudio.google.com/app/apikey" 
                   target="_blank" 
@@ -127,7 +129,7 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
                   className="text-blue-500 hover:underline inline-flex items-center ml-1"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Get a key <ExternalLink className="w-3 h-3 ml-1" />
+                  {t('apiKey.getKey')} <ExternalLink className="w-3 h-3 ml-1" />
                 </a>
               </p>
             )}
@@ -153,7 +155,7 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
               type={showKey ? "text" : "password"}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Gemini API key..."
+              placeholder={t('apiKey.enterKey')}
               className={`pr-20 ${isKeyValid === true ? 'border-green-500' : isKeyValid === false ? 'border-red-500' : ''}`}
             />
             <Button
@@ -162,21 +164,21 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
               onClick={() => setShowKey(!showKey)}
               className="absolute right-0 top-0 h-full px-3 py-2 text-xs"
             >
-              {showKey ? "Hide" : "Show"}
+              {showKey ? t('apiKey.hide') : t('apiKey.show')}
             </Button>
           </div>
           
           {isKeyValid === true && (
             <div className="flex items-center text-green-600 text-sm">
               <CheckCircle2 className="h-4 w-4 mr-1" />
-              API key is valid
+              {t('apiKey.isValid')}
             </div>
           )}
           
           {isKeyValid === false && (
             <div className="flex items-center text-red-600 text-sm">
               <AlertCircle className="h-4 w-4 mr-1" />
-              Invalid API key. Please check and try again.
+              {t('apiKey.isInvalid')}
             </div>
           )}
           
@@ -190,7 +192,7 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
               htmlFor="save-key"
               className="text-sm text-gray-600 leading-none cursor-pointer"
             >
-              Save API key in this browser
+              {t('apiKey.saveInBrowser')}
             </label>
           </div>
           
@@ -202,7 +204,7 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
                 onClick={handleClearKey}
                 disabled={!apiKey || isValidating}
               >
-                Clear
+                {t('common.clear')}
               </Button>
             )}
             <Button 
@@ -211,7 +213,7 @@ export default function ApiKeyInput({ onApiKeyChange }: ApiKeyInputProps) {
               disabled={!apiKey || isValidating}
               className={isValidating ? "opacity-80" : ""}
             >
-              {isValidating ? "Validating..." : isKeyValid === true ? "Update API Key" : "Save & Use Key"}
+              {isValidating ? t('apiKey.validating') : isKeyValid === true ? t('apiKey.update') : t('apiKey.saveAndUse')}
             </Button>
           </div>
         </div>

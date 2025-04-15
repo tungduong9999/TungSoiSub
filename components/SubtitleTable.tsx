@@ -6,6 +6,7 @@ import ApiErrorDisplay from "@/components/ApiErrorDisplay";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, Loader2, Edit, RotateCw, ChevronUp, ChevronDown } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nContext";
 
 interface SubtitleTableProps {
   subtitles: SubtitleItem[];
@@ -30,6 +31,7 @@ export default function SubtitleTable({
   translating,
   batchSize = 10,
 }: SubtitleTableProps) {
+  const { t } = useI18n();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState<string>("");
   const [retryingBatch, setRetryingBatch] = useState<number | null>(null);
@@ -116,7 +118,7 @@ export default function SubtitleTable({
             <div className="flex-1">
               <h3 className="text-sm font-medium text-amber-800">Quick batch retry</h3>
               <p className="text-xs text-amber-700 mb-2">
-                To save time, you can retry an entire batch instead of individual subtitles
+                {t('batchErrorDisplay.description')}
               </p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1">
@@ -129,8 +131,8 @@ export default function SubtitleTable({
                   return (
                     <div key={`batch-${batch.batchIndex}`} className="flex items-center justify-between py-1 px-2 bg-white border border-amber-100 rounded text-sm">
                       <div className="truncate">
-                        <span className="font-medium">Batch {batch.batchIndex + 1}:</span> #{firstId}-{lastId}
-                        <span className="ml-1 text-rose-600 text-xs">({errorCount} errors)</span>
+                        <span className="font-medium">{t('subtitleTable.batch')} {batch.batchIndex + 1}:</span> #{firstId}-{lastId}
+                        <span className="ml-1 text-rose-600 text-xs">({errorCount} {t('subtitleTable.errors')})</span>
                       </div>
                       <Button
                         size="sm"
@@ -142,12 +144,12 @@ export default function SubtitleTable({
                         {isRetrying ? (
                           <>
                             <Loader2 className="animate-spin h-3 w-3 mr-1" />
-                            Retrying
+                            {t('common.retrying')}
                           </>
                         ) : (
                           <>
                             <RotateCw className="h-3 w-3 mr-1" />
-                            Retry
+                            {t('common.retry')}
                           </>
                         )}
                       </Button>
@@ -166,12 +168,12 @@ export default function SubtitleTable({
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-white border-b border-gray-200">
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-12 bg-gray-50 first:rounded-tl-md">ID</th>
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-28 bg-gray-50">Time</th>
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">Original Text</th>
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">Translation</th>
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-24 text-center bg-gray-50">Status</th>
-                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-20 text-right bg-gray-50 last:rounded-tr-md">Action</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-12 bg-gray-50 first:rounded-tl-md">{t('subtitleTable.id')}</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-28 bg-gray-50">{t('subtitleTable.time')}</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">{t('subtitleTable.originalText')}</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">{t('subtitleTable.translation')}</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-24 text-center bg-gray-50">{t('subtitleTable.status')}</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-20 text-right bg-gray-50 last:rounded-tr-md">{t('subtitleTable.action')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -208,8 +210,8 @@ export default function SubtitleTable({
                             className="w-full min-h-[80px] max-h-[150px] text-sm custom-scrollbar"
                           />
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => handleSave(subtitle.id)}>Save</Button>
-                            <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+                            <Button size="sm" onClick={() => handleSave(subtitle.id)}>{t('common.save')}</Button>
+                            <Button size="sm" variant="outline" onClick={handleCancel}>{t('common.cancel')}</Button>
                           </div>
                         </div>
                       ) : (
@@ -220,12 +222,12 @@ export default function SubtitleTable({
                         >
                           {subtitle.status === "error" 
                             ? <ApiErrorDisplay 
-                                error={subtitle.error || "Translation error"} 
+                                error={subtitle.error || t('errors.translationError')} 
                                 retryAction={() => onRetry(subtitle.id)}
                               />
                             : subtitle.translatedText || (subtitle.status === "pending" ? 
-                                <span className="text-gray-400 italic text-sm">Waiting to translate...</span> : 
-                                <span className="text-blue-400 italic text-sm">Translating...</span>
+                                <span className="text-gray-400 italic text-sm">{t('subtitleTable.waitingToTranslate')}</span> : 
+                                <span className="text-blue-400 italic text-sm">{t('subtitleTable.translating')}</span>
                               )}
                         </div>
                       )}
@@ -243,6 +245,7 @@ export default function SubtitleTable({
                               onClick={() => handleEdit(subtitle.id, subtitle.translatedText)}
                               disabled={translating}
                               className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title={t('common.edit')}
                             >
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
@@ -254,6 +257,7 @@ export default function SubtitleTable({
                               onClick={() => onRetry(subtitle.id)}
                               disabled={translating || retryingBatch === batchIndex}
                               className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                              title={t('common.retry')}
                             >
                               <RotateCw className="h-3.5 w-3.5" />
                             </Button>
@@ -269,7 +273,7 @@ export default function SubtitleTable({
         </div>
         <div className="flex justify-between items-center mt-3 px-4">
           <div className="text-xs text-gray-500">
-            Đang hiển thị <span className="font-medium">{subtitles.length}</span> phụ đề
+            {t('subtitleTable.showing')} <span className="font-medium">{subtitles.length}</span> {t('subtitleTable.subtitles')}
           </div>
           <Button 
             variant="ghost" 
@@ -278,14 +282,14 @@ export default function SubtitleTable({
             className="text-gray-500 hover:text-gray-700 px-2 py-1 h-8"
           >
             {expandedTable ? (
-              <><ChevronUp className="h-4 w-4 mr-1" /> Thu gọn bảng</>
+              <><ChevronUp className="h-4 w-4 mr-1" /> {t('subtitleTable.collapseTable')}</>
             ) : (
-              <><ChevronDown className="h-4 w-4 mr-1" /> Mở rộng bảng</>
+              <><ChevronDown className="h-4 w-4 mr-1" /> {t('subtitleTable.expandTable')}</>
             )}
           </Button>
           <div className="text-xs text-gray-500 text-right">
-            <span className="font-medium">{subtitles.filter(s => s.status === "translated").length}</span> đã dịch, 
-            <span className="font-medium ml-1">{subtitles.filter(s => s.status === "error").length}</span> lỗi
+            <span className="font-medium">{subtitles.filter(s => s.status === "translated").length}</span> {t('subtitleTable.translated')}, 
+            <span className="font-medium ml-1">{subtitles.filter(s => s.status === "error").length}</span> {t('subtitleTable.errors')}
           </div>
         </div>
       </div>

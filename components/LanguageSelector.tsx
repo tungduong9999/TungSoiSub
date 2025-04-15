@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n/I18nContext";
 
 interface LanguageSelectorProps {
   value: string;
@@ -60,6 +61,7 @@ const LANGUAGES = [
 ];
 
 export default function LanguageSelector({ value, onChange }: LanguageSelectorProps) {
+  const { t } = useI18n();
   // Filter languages based on input
   const [filter, setFilter] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -86,13 +88,13 @@ export default function LanguageSelector({ value, onChange }: LanguageSelectorPr
             // Delay closing to allow for selection
             setTimeout(() => setIsOpen(false), 200);
           }}
-          placeholder="Select or type a language"
+          placeholder={t('translationSettings.selectLanguage')}
           className="w-full"
         />
       </div>
 
       {isOpen && filteredLanguages.length > 0 && (
-        <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm">
+        <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base overflow-auto focus:outline-none sm:text-sm custom-scrollbar">
           <ul className="divide-y divide-gray-200">
             {filteredLanguages.map((language) => (
               <li

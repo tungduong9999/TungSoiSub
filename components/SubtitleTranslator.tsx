@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { saveAs } from "file-saver";
 import { ChevronDown, ChevronUp, Globe, AlertCircle, PauseCircle, PlayCircle, StopCircle, X } from "lucide-react";
+import { useI18n } from "@/lib/i18n/I18nContext";
 
 // Define subtitle item interface
 export interface SubtitleItem {
@@ -41,13 +42,14 @@ const MAX_BATCH_SIZE = 30; // Maximum number of subtitles in one large batch
 const RATE_LIMIT_DELAY = 2000; // Delay between batches in milliseconds
 
 export default function SubtitleTranslator() {
+  const { t, formatParams } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [subtitles, setSubtitles] = useState<SubtitleItem[]>([]);
   const [translating, setTranslating] = useState<boolean>(false);
   const [targetLanguage, setTargetLanguage] = useState<string>("Vietnamese");
   const [customPrompt, setCustomPrompt] = useState<string>(
-    "Translate the following subtitle to {language}. Maintain the original tone, style, and nuances. Keep it concise to fit the subtitle timing."
+    t('translationSettings.customPromptDefault')
   );
   const [translationProgress, setTranslationProgress] = useState<number>(0);
   const [apiKeyProvided, setApiKeyProvided] = useState<boolean>(false);
@@ -60,12 +62,34 @@ export default function SubtitleTranslator() {
   const [translationError, setTranslationError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pauseStateRef = useRef<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
+  const [dragCounter, setDragCounter] = useState<number>(0);
 
   // Cập nhật pauseStateRef khi isPaused thay đổi
   useEffect(() => {
     pauseStateRef.current = isPaused;
     console.log(`Pause state changed to: ${isPaused}`);
   }, [isPaused]);
+
+  // Update custom prompt when language changes
+  useEffect(() => {
+    setCustomPrompt(formatParams(t('translationSettings.customPromptDefault'), { language: targetLanguage }));
+  }, [t, formatParams, targetLanguage]);
+
+  // Theo dõi sự thay đổi ngôn ngữ để đánh dấu phụ đề cần dịch lại
+  const [previousLanguage, setPreviousLanguage] = useState<string>(targetLanguage);
+  
+  useEffect(() => {
+    // Nếu ngôn ngữ thay đổi và đã có dữ liệu phụ đề
+    if (previousLanguage !== targetLanguage && subtitles.length > 0) {
+      // Hiển thị thông báo nhỏ rằng cần dịch lại
+      console.log(`Ngôn ngữ đã thay đổi từ ${previousLanguage} sang ${targetLanguage}. Phụ đề sẽ được dịch lại.`);
+    }
+    
+    // Ghi nhớ ngôn ngữ hiện tại cho lần thay đổi tiếp theo
+    setPreviousLanguage(targetLanguage);
+  }, [targetLanguage, subtitles.length, previousLanguage]);
 
   // Xử lý khi người dùng cung cấp API key
   const handleApiKeyChange = (apiKey: string) => {
@@ -94,13 +118,13 @@ export default function SubtitleTranslator() {
   const validateBeforeTranslate = () => {
     // Kiểm tra API key
     if (!getApiKey()) {
-      setValidationError("Vui lòng nhập Gemini API key trước khi dịch");
+      setValidationError(t('errors.apiKeyRequired'));
       return false;
     }
     
     // Kiểm tra file SRT
     if (!file || subtitles.length === 0) {
-      setValidationError("Vui lòng tải lên file phụ đề SRT trước khi dịch");
+      setValidationError(t('errors.fileRequired'));
       return false;
     }
     
@@ -111,35 +135,35 @@ export default function SubtitleTranslator() {
 
   // Tạm dừng hoặc tiếp tục dịch
   const handlePauseResume = () => {
-    const newPausedState = !isPaused;
-    setIsPaused(newPausedState);
-    pauseStateRef.current = newPausedState;
-    console.log(`Pause state set to: ${newPausedState}`);
+    console.log("Toggling pause state:", !isPaused);
+    setIsPaused(!isPaused);
+    pauseStateRef.current = !isPaused;
   };
 
   // Dừng hoàn toàn quá trình dịch
   const handleStop = () => {
     if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+      abortControllerRef.current.abort("Translation aborted by user.");
       abortControllerRef.current = null;
     }
-    
-    // Reset trạng thái của các subtitle đang dịch về pending
-    setSubtitles(prev => prev.map(sub => 
-      sub.status === "translating" 
-        ? { ...sub, status: "pending", error: undefined } 
-        : sub
-    ));
-    
-    setTranslating(false);
-    setIsPaused(false);
-    setTranslationProgress(0);
+    console.log("Translation stopped by user");
   };
 
   // Handle file selection
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
+
+    processFile(selectedFile);
+  };
+
+  // Process the selected/dropped file
+  const processFile = async (selectedFile: File) => {
+    // Check if file is an SRT file
+    if (!selectedFile.name.toLowerCase().endsWith('.srt')) {
+      setValidationError(t('fileUpload.invalidFormat'));
+      return;
+    }
 
     setFile(selectedFile);
     setFileName(selectedFile.name);
@@ -163,7 +187,76 @@ export default function SubtitleTranslator() {
       setSubtitles(subtitleItems);
     } catch (error) {
       console.error("Error parsing the SRT file:", error);
-      setValidationError("Không thể phân tích file SRT. Vui lòng đảm bảo file có định dạng SRT hợp lệ.");
+      setValidationError(t('fileUpload.invalidFormat'));
+    }
+  };
+
+  // Handle drag events
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    // Ngăn trình duyệt mở tệp khi kéo thả
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (translating) return;
+    
+    // Tăng bộ đếm khi có sự kiện enter
+    setDragCounter(prev => prev + 1);
+    
+    // Chỉ set isDragging thành true nếu có file
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    // Ngăn trình duyệt mở tệp khi kéo thả
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Giảm bộ đếm khi có sự kiện leave
+    setDragCounter(prev => prev - 1);
+    
+    // Chỉ khi bộ đếm về 0 (đã rời khỏi vùng thả hoàn toàn) mới set isDragging về false
+    if (dragCounter === 1) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    // Rất quan trọng: ngăn chặn hành vi mặc định của trình duyệt
+    // khi kéo file vào trang web
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (translating) return;
+    
+    // Hiển thị rõ cho người dùng biết có thể thả tệp vào đây
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    // Rất quan trọng: ngăn chặn hành vi mặc định của trình duyệt
+    // để tránh trình duyệt mở tệp thay vì xử lý trong ứng dụng
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Reset trạng thái kéo thả
+    setIsDragging(false);
+    setDragCounter(0);
+    
+    if (translating) return;
+    
+    // Kiểm tra xem có file nào được thả không
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const file = droppedFiles[0];
+      
+      // Kiểm tra xem file có phải là file SRT không
+      if (file.name.toLowerCase().endsWith('.srt')) {
+        processFile(file);
+      } else {
+        setValidationError(t('fileUpload.invalidFormat'));
+      }
     }
   };
 
@@ -172,6 +265,17 @@ export default function SubtitleTranslator() {
     // Xác thực đầu vào và dừng nếu có lỗi
     if (!validateBeforeTranslate()) {
       return;
+    }
+    
+    // Đặt lại trạng thái cho tất cả phụ đề về "pending" khi dịch lại với ngôn ngữ mới
+    if (subtitles.some(sub => sub.status === "translated")) {
+      const resetSubtitles = subtitles.map(sub => ({
+        ...sub,
+        status: "pending" as const,
+        translatedText: "", // Xóa bản dịch cũ
+        error: undefined
+      }));
+      setSubtitles(resetSubtitles);
     }
     
     setTranslating(true);
@@ -191,7 +295,7 @@ export default function SubtitleTranslator() {
         sub.status === "pending" || sub.status === "error"
       );
       
-      console.log(`Translating ${pendingSubtitles.length} subtitles`);
+      console.log(`Translating ${pendingSubtitles.length} subtitles to ${targetLanguage}`);
       
       // Process subtitles in batches
       const newFailedBatches: { index: number; items: SubtitleItem[] }[] = [];
@@ -700,10 +804,10 @@ export default function SubtitleTranslator() {
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-5 w-5 text-rose-500 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h3 className="text-sm font-medium text-rose-800">Lỗi dịch phụ đề</h3>
+                  <h3 className="text-sm font-medium text-rose-800">{t('errors.translationError')}</h3>
                   <p className="text-sm text-rose-700 mt-1">{translationError}</p>
                   <p className="text-xs text-rose-600 mt-2">
-                    Bạn có thể kiểm tra các phụ đề lỗi và thử lại từng phụ đề hoặc từng batch.
+                    {t('errors.translationErrorDescription')}
                   </p>
                 </div>
               </div>
@@ -713,256 +817,255 @@ export default function SubtitleTranslator() {
           {/* File Upload and Settings */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* File Upload */}
-            <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h2 className="text-lg font-medium mb-2">Select SRT File</h2>
-              <p className="text-sm text-gray-500 mb-3">
-                Choose an SRT subtitle file to translate
-              </p>
-              
-              <ClientOnly>
-                <div className="flex justify-between items-center">
-                  <div className="w-full">
-                    <Input
-                      type="file"
+            <Card className="lg:col-span-1">
+              <CardHeader className="pb-3">
+                <CardTitle>{t('fileUpload.title')}</CardTitle>
+                <CardDescription>{t('fileUpload.description')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div
+                    ref={dropZoneRef}
+                    className={`border-2 border-dashed rounded-md p-6 text-center cursor-pointer transition-colors
+                      ${isDragging ? 'border-blue-400 bg-blue-50/50' : ''}
+                      ${validationError && !file ? 'border-rose-300 bg-rose-50/50' : 'border-gray-300 hover:bg-gray-50'}
+                    `}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <input
                       ref={fileInputRef}
+                      type="file"
                       accept=".srt"
+                      className="hidden"
                       onChange={handleFileChange}
-                      className={`w-full cursor-pointer ${!file && validationError?.includes("SRT") ? 'border-rose-400' : ''}`}
+                      disabled={translating}
                     />
+                    <div className="text-sm text-gray-500">
+                      {isDragging ? (
+                        <p className="text-blue-500 font-medium">{t('fileUpload.dropFileHere')}</p>
+                      ) : (
+                        t('fileUpload.dragAndDrop')
+                      )}
+                    </div>
                   </div>
-                  {file && (
-                    <Button variant="outline" size="sm" onClick={handleClearFile}>
-                      Clear
-                    </Button>
-                  )}
-                </div>
-              </ClientOnly>
-              
-              {file && (
-                <div className="text-sm text-gray-500 mt-2 truncate">
-                  Selected: <span className="font-medium">{fileName}</span>
-                </div>
-              )}
-              
-              {validationError?.includes("SRT") && (
-                <div className="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-md flex items-center gap-2 text-sm text-rose-600">
-                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                  {validationError}
-                </div>
-              )}
-            </div>
 
-            {/* Translation Settings */}
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
-              <div 
-                className="p-4 flex items-start justify-between cursor-pointer hover:bg-gray-50"
-                onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
-              >
-                <div className="flex items-start gap-3">
-                  <Globe className="w-5 h-5 text-blue-500 mt-1" />
-                  <div>
-                    <h2 className="text-lg font-medium">Translation Settings</h2>
-                    {isSettingsCollapsed ? (
-                      <p className="text-sm text-gray-600">
-                        {targetLanguage} | {customPrompt.length > 50 ? customPrompt.substring(0, 50) + '...' : customPrompt}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-gray-500">Configure translation options</p>
-                    )}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsSettingsCollapsed(!isSettingsCollapsed);
-                  }}
-                >
-                  {isSettingsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                </Button>
-              </div>
-              
-              {!isSettingsCollapsed && (
-                <div className="px-4 pb-4 pt-1 space-y-3 border-t border-gray-100">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <h3 className="text-sm font-medium mb-2">Target Language</h3>
-                      <LanguageSelector
-                        value={targetLanguage}
-                        onChange={setTargetLanguage}
-                      />
+                  {file && (
+                    <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
+                      <div className="truncate">
+                        <span className="font-medium">{t('fileUpload.fileSelected')}</span> {fileName}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="ml-2 h-7 text-xs"
+                        onClick={handleClearFile}
+                        disabled={translating}
+                      >
+                        {t('fileUpload.clearFile')}
+                      </Button>
                     </div>
-                    
-                    <div>
-                      <h3 className="text-sm font-medium mb-2">Custom Prompt</h3>
-                      <Textarea
-                        value={customPrompt}
-                        onChange={(e) => setCustomPrompt(e.target.value)}
-                        placeholder="Custom prompt for translation..."
-                        className="min-h-[80px] resize-y max-h-[200px] custom-scrollbar"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Use {"{language}"} to insert the target language in your prompt.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  {/* API Key Error Message */}
-                  {validationError?.includes("API key") && (
-                    <div className="p-2 bg-rose-50 border border-rose-200 rounded-md flex items-center gap-2 text-sm text-rose-600">
-                      <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  )}
+
+                  {validationError && !file && (
+                    <div className="text-xs text-rose-600 flex items-center">
+                      <AlertCircle className="h-3 w-3 mr-1" />
                       {validationError}
                     </div>
                   )}
-                  
-                  {/* Actions */}
-                  <div className="mt-4 space-y-3">
-                    {translating && (
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="text-gray-600">
-                            {isPaused ? (
-                              <span className="text-amber-600 flex items-center">
-                                <PauseCircle className="h-4 w-4 mr-1" />
-                                Đã tạm dừng - Nhấn "Tiếp tục" để tiếp tục dịch
-                              </span>
-                            ) : (
-                              <span>Đang dịch phụ đề...</span>
-                            )}
-                          </div>
-                          <div className={`font-medium ${isPaused ? 'text-amber-600' : 'text-blue-600'}`}>
-                            {translationProgress}%
-                          </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Translation Settings */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle>{t('translationSettings.title')}</CardTitle>
+                    <CardDescription>{t('translationSettings.description')}</CardDescription>
+                  </div>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-8 w-8"
+                    onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
+                  >
+                    {isSettingsCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </CardHeader>
+
+              {!isSettingsCollapsed && (
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {t('translationSettings.targetLanguage')}
+                      </label>
+                      <LanguageSelector 
+                        value={targetLanguage} 
+                        onChange={setTargetLanguage} 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {t('translationSettings.customPrompt')}
+                      </label>
+                      <Textarea 
+                        value={customPrompt}
+                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        className="min-h-[80px] resize-y max-h-[200px] custom-scrollbar"
+                        disabled={translating}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Translation Buttons */}
+                  <div className="flex justify-between">
+                    <div className="flex-1 flex items-center">
+                      {subtitles.length > 0 && (
+                        <div className="text-sm text-gray-500">
+                          {formatParams(t('fileUpload.successfullyParsed'), { count: subtitles.length })}
                         </div>
-                        <LoadingIndicator progress={translationProgress} isPaused={isPaused} />
-                        {isPaused && (
-                          <div className="p-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-700 flex items-center gap-1 mt-1">
-                            <AlertCircle className="h-3 w-3 flex-shrink-0" />
-                            Quá trình dịch đã tạm dừng. Nhấn "Tiếp tục" để tiếp tục dịch phụ đề, hoặc "Dừng" để hủy quá trình dịch.
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="flex justify-between items-center gap-3">
-                      {!translating ? (
-                        <Button
-                          onClick={handleTranslate}
-                          disabled={translating}
-                          className="w-32"
-                        >
-                          Translate
-                        </Button>
-                      ) : (
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      {translating && (
+                        <>
+                          <Button 
+                            variant="outline" 
                             onClick={handlePauseResume}
                             className="flex items-center gap-1"
                           >
                             {isPaused ? (
                               <>
                                 <PlayCircle className="h-4 w-4" />
-                                Tiếp tục
+                                {t('common.resume')}
                               </>
                             ) : (
                               <>
                                 <PauseCircle className="h-4 w-4" />
-                                Tạm dừng
+                                {t('common.pause')}
                               </>
                             )}
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          <Button 
+                            variant="destructive"
                             onClick={handleStop}
-                            className="flex items-center gap-1 text-rose-600 hover:text-rose-700"
+                            className="flex items-center gap-1"
                           >
                             <StopCircle className="h-4 w-4" />
-                            Dừng
+                            {t('common.stop')}
                           </Button>
-                        </div>
+                        </>
                       )}
-                      
-                      <Button
-                        variant={subtitles.some(s => s.status === "translated") ? "default" : "outline"}
-                        onClick={handleExport}
-                        disabled={translating || subtitles.every(s => s.status !== "translated")}
-                        className="w-32"
-                      >
-                        Export SRT
-                      </Button>
+                      {!translating && (
+                        <Button 
+                          onClick={handleTranslate} 
+                          disabled={!file || subtitles.length === 0}
+                          className="flex items-center gap-1"
+                        >
+                          <Globe className="h-4 w-4" />
+                          {t('translationSettings.startTranslation')}
+                        </Button>
+                      )}
                     </div>
                   </div>
-                </div>
+                </CardContent>
               )}
-            </div>
+
+              {translating && (
+                <CardFooter className="pt-2 border-t">
+                  {isPaused ? (
+                    <div className="w-full">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-sm font-medium text-amber-600">
+                          {t('translationSettings.translationPaused')}
+                        </div>
+                        <div className="text-sm text-gray-500">{translationProgress}%</div>
+                      </div>
+                      <LoadingIndicator progress={translationProgress} isPaused={isPaused} />
+                      <div className="mt-2 text-xs text-amber-600 px-2 py-1 bg-amber-50 border border-amber-100 rounded-md">
+                        {t('translationSettings.translationPaused')}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="w-full">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-sm font-medium text-blue-600">
+                          {t('translationSettings.translationInProgress')}
+                        </div>
+                        <div className="text-sm text-gray-500">{translationProgress}%</div>
+                      </div>
+                      <LoadingIndicator progress={translationProgress} />
+                    </div>
+                  )}
+                </CardFooter>
+              )}
+            </Card>
           </div>
 
-          {file && subtitles.length > 0 && (
-            <>
-              {/* Hiển thị batch error display nếu có batch bị lỗi */}
-              {failedBatches.length > 0 && (
-                <BatchErrorDisplay 
-                  failedBatches={failedBatches} 
-                  onRetryBatch={handleRetryBatch}
-                  isProcessing={translating}
-                />
-              )}
-              
-              {/* Subtitle Table */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-all duration-300">
-                <div 
-                  className="p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50"
-                  onClick={() => setIsSubtitleTableCollapsed(!isSubtitleTableCollapsed)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <h2 className="text-lg font-medium">Subtitles</h2>
-                      <p className="text-sm text-gray-500">
-                        {subtitles.length} subtitles found | {subtitles.filter(s => s.status === "translated").length} translated
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm flex items-center gap-1">
-                      <span className="text-gray-500">Progress: </span>
-                      <span className="font-medium">
-                        {subtitles.filter(s => s.status === "translated").length} / {subtitles.length}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsSubtitleTableCollapsed(!isSubtitleTableCollapsed);
-                      }}
+          {/* Batch Error Display */}
+          {failedBatches.length > 0 && (
+            <BatchErrorDisplay 
+              failedBatches={failedBatches}
+              onRetryBatch={handleRetryBatch}
+              isProcessing={translating}
+            />
+          )}
+
+          {/* Subtitle Table */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle>Subtitles</CardTitle>
+                  <CardDescription>View and edit translated subtitles</CardDescription>
+                </div>
+                {subtitles.length > 0 && (
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-8 w-8"
+                      onClick={() => setIsSubtitleTableCollapsed(!isSubtitleTableCollapsed)}
                     >
                       {isSubtitleTableCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                     </Button>
-                  </div>
-                </div>
-                
-                {!isSubtitleTableCollapsed && (
-                  <div className="border-t border-gray-200">
-                    <SubtitleTable
-                      subtitles={subtitles}
-                      onRetry={handleRetrySubtitle}
-                      onRetryBatch={handleRetryBatch}
-                      onUpdateTranslation={handleUpdateSubtitle}
-                      translating={translating}
-                      batchSize={BATCH_SIZE}
-                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExport}
+                      disabled={!subtitles.some(s => s.status === "translated")}
+                    >
+                      {t('export.exportTranslated')}
+                    </Button>
                   </div>
                 )}
               </div>
-            </>
-          )}
+            </CardHeader>
+            {!isSubtitleTableCollapsed && (
+              <CardContent>
+                {subtitles.length > 0 ? (
+                  <SubtitleTable
+                    subtitles={subtitles}
+                    onRetry={handleRetrySubtitle}
+                    onRetryBatch={handleRetryBatch}
+                    onUpdateTranslation={handleUpdateSubtitle}
+                    translating={translating}
+                  />
+                ) : (
+                  <div className="text-center py-10 text-gray-500">
+                    {t('fileUpload.noFileSelected')}
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
         </>
       )}
     </div>
