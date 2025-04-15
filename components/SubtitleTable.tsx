@@ -1,0 +1,294 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { SubtitleItem } from "@/components/SubtitleTranslator";
+import ApiErrorDisplay from "@/components/ApiErrorDisplay";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertTriangle, Loader2, Edit, RotateCw, ChevronUp, ChevronDown } from "lucide-react";
+
+interface SubtitleTableProps {
+  subtitles: SubtitleItem[];
+  onRetry: (id: number) => void;
+  onRetryBatch?: (batchIndex: number) => Promise<void>;
+  onUpdateTranslation: (id: number, translatedText: string) => void;
+  translating: boolean;
+  batchSize?: number;
+}
+
+interface BatchGroup {
+  batchIndex: number;
+  items: SubtitleItem[];
+  hasErrors: boolean;
+}
+
+export default function SubtitleTable({
+  subtitles,
+  onRetry,
+  onRetryBatch,
+  onUpdateTranslation,
+  translating,
+  batchSize = 10,
+}: SubtitleTableProps) {
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editText, setEditText] = useState<string>("");
+  const [retryingBatch, setRetryingBatch] = useState<number | null>(null);
+  const [expandedTable, setExpandedTable] = useState<boolean>(false);
+
+  // Nhóm phụ đề theo batch
+  const batches = useMemo(() => {
+    const result: BatchGroup[] = [];
+    
+    // Nhóm phụ đề theo batch
+    for (let i = 0; i < subtitles.length; i += batchSize) {
+      const batchItems = subtitles.slice(i, i + batchSize);
+      const batchIndex = Math.floor(i / batchSize);
+      
+      result.push({
+        batchIndex,
+        items: batchItems,
+        hasErrors: batchItems.some(item => item.status === "error")
+      });
+    }
+    
+    return result;
+  }, [subtitles, batchSize]);
+
+  // Start editing a subtitle
+  const handleEdit = (id: number, text: string) => {
+    setEditingId(id);
+    setEditText(text);
+  };
+
+  // Save edited subtitle
+  const handleSave = (id: number) => {
+    onUpdateTranslation(id, editText);
+    setEditingId(null);
+    setEditText("");
+  };
+
+  // Cancel editing
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  // Retry a batch
+  const handleRetryBatch = async (batchIndex: number) => {
+    if (!onRetryBatch) return;
+    
+    setRetryingBatch(batchIndex);
+    try {
+      await onRetryBatch(batchIndex);
+    } finally {
+      setRetryingBatch(null);
+    }
+  };
+
+  // Get status badge style and text
+  const getStatusBadge = (status: SubtitleItem["status"]) => {
+    switch (status) {
+      case "pending":
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">Pending</span>;
+      case "translating":
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-600 flex items-center">
+          <Loader2 className="w-3 h-3 mr-1 animate-spin" />Translating
+        </span>;
+      case "translated":
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-600">Translated</span>;
+      case "error":
+        return <span className="px-2 py-0.5 text-xs rounded-full bg-rose-100 text-rose-600">Error</span>;
+      default:
+        return null;
+    }
+  };
+
+  // Get count of errors in batches
+  const errorBatchCount = batches.filter(batch => batch.hasErrors).length;
+
+  return (
+    <div className="space-y-4">
+      {/* Batch error quick retry section */}
+      {onRetryBatch && errorBatchCount > 0 && (
+        <div className="mx-4 mb-2 p-3 border border-amber-200 bg-amber-50 rounded">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="text-amber-500 h-4 w-4 mt-1 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-medium text-amber-800">Quick batch retry</h3>
+              <p className="text-xs text-amber-700 mb-2">
+                To save time, you can retry an entire batch instead of individual subtitles
+              </p>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1">
+                {batches.filter(batch => batch.hasErrors).map(batch => {
+                  const errorCount = batch.items.filter(item => item.status === "error").length;
+                  const firstId = batch.items[0]?.id;
+                  const lastId = batch.items[batch.items.length - 1]?.id;
+                  const isRetrying = retryingBatch === batch.batchIndex;
+                  
+                  return (
+                    <div key={`batch-${batch.batchIndex}`} className="flex items-center justify-between py-1 px-2 bg-white border border-amber-100 rounded text-sm">
+                      <div className="truncate">
+                        <span className="font-medium">Batch {batch.batchIndex + 1}:</span> #{firstId}-{lastId}
+                        <span className="ml-1 text-rose-600 text-xs">({errorCount} errors)</span>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleRetryBatch(batch.batchIndex)}
+                        disabled={isRetrying || translating}
+                        className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-100"
+                      >
+                        {isRetrying ? (
+                          <>
+                            <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                            Retrying
+                          </>
+                        ) : (
+                          <>
+                            <RotateCw className="h-3 w-3 mr-1" />
+                            Retry
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subtitle table */}
+      <div className="overflow-x-auto -mx-4 sm:mx-0">
+        <div className={`${expandedTable ? 'max-h-[800px]' : 'max-h-[400px]'} custom-scrollbar overflow-y-auto border border-gray-200 rounded-md transition-all duration-300`}>
+          <table className="w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-white border-b border-gray-200">
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-12 bg-gray-50 first:rounded-tl-md">ID</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-28 bg-gray-50">Time</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">Original Text</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase bg-gray-50">Translation</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-24 text-center bg-gray-50">Status</th>
+                <th className="px-4 py-2 text-xs font-medium text-gray-500 uppercase w-20 text-right bg-gray-50 last:rounded-tr-md">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {subtitles.map((subtitle, index) => {
+                const batchIndex = Math.floor((subtitle.id - 1) / batchSize);
+                const isEven = index % 2 === 0;
+                
+                return (
+                  <tr key={subtitle.id} className={`
+                    ${isEven ? 'bg-white' : 'bg-gray-50/50'} 
+                    ${retryingBatch === batchIndex && subtitle.status === "translating" ? "bg-blue-50/70" : ""}
+                    hover:bg-blue-50/30 transition-colors border-b border-gray-100
+                  `}>
+                    <td className="px-4 py-2 align-top text-gray-700">
+                      {subtitle.id}
+                      {subtitle.id % batchSize === 1 && (
+                        <span className="ml-1 text-xs text-gray-400">B{batchIndex + 1}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 align-top text-gray-500 text-xs whitespace-nowrap">
+                      <div>{subtitle.startTime}</div>
+                      <div className="text-gray-400">↓</div>
+                      <div>{subtitle.endTime}</div>
+                    </td>
+                    <td className="px-4 py-2 align-top text-gray-600">
+                      <div className="max-w-xs whitespace-pre-wrap break-words text-sm max-h-[120px] custom-scrollbar">{subtitle.text}</div>
+                    </td>
+                    <td className="px-4 py-2 align-top text-gray-800">
+                      {editingId === subtitle.id ? (
+                        <div className="space-y-2">
+                          <Textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            className="w-full min-h-[80px] max-h-[150px] text-sm custom-scrollbar"
+                          />
+                          <div className="flex gap-2">
+                            <Button size="sm" onClick={() => handleSave(subtitle.id)}>Save</Button>
+                            <Button size="sm" variant="outline" onClick={handleCancel}>Cancel</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div 
+                          className={`max-w-xs whitespace-pre-wrap break-words max-h-[120px] custom-scrollbar ${
+                            subtitle.status === "error" ? "text-rose-600" : "text-gray-800"
+                          }`}
+                        >
+                          {subtitle.status === "error" 
+                            ? <ApiErrorDisplay 
+                                error={subtitle.error || "Translation error"} 
+                                retryAction={() => onRetry(subtitle.id)}
+                              />
+                            : subtitle.translatedText || (subtitle.status === "pending" ? 
+                                <span className="text-gray-400 italic text-sm">Waiting to translate...</span> : 
+                                <span className="text-blue-400 italic text-sm">Translating...</span>
+                              )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 align-top text-center">
+                      {getStatusBadge(subtitle.status)}
+                    </td>
+                    <td className="px-4 py-2 align-top text-right">
+                      {subtitle.status !== "translating" && editingId !== subtitle.id && (
+                        <div className="flex justify-end gap-1">
+                          {subtitle.status === "translated" && (
+                            <Button 
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => handleEdit(subtitle.id, subtitle.translatedText)}
+                              disabled={translating}
+                              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {subtitle.status === "error" && (
+                            <Button 
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => onRetry(subtitle.id)}
+                              disabled={translating || retryingBatch === batchIndex}
+                              className="h-7 w-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            >
+                              <RotateCw className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex justify-between items-center mt-3 px-4">
+          <div className="text-xs text-gray-500">
+            Đang hiển thị <span className="font-medium">{subtitles.length}</span> phụ đề
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setExpandedTable(!expandedTable)}
+            className="text-gray-500 hover:text-gray-700 px-2 py-1 h-8"
+          >
+            {expandedTable ? (
+              <><ChevronUp className="h-4 w-4 mr-1" /> Thu gọn bảng</>
+            ) : (
+              <><ChevronDown className="h-4 w-4 mr-1" /> Mở rộng bảng</>
+            )}
+          </Button>
+          <div className="text-xs text-gray-500 text-right">
+            <span className="font-medium">{subtitles.filter(s => s.status === "translated").length}</span> đã dịch, 
+            <span className="font-medium ml-1">{subtitles.filter(s => s.status === "error").length}</span> lỗi
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+} 
