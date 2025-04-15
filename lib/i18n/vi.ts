@@ -41,6 +41,8 @@ const vi = {
     description: "Chọn tệp phụ đề SRT để dịch",
     dragAndDrop: "Kéo và thả tệp SRT vào đây, hoặc nhấp để chọn",
     dropFileHere: "Thả tệp SRT của bạn vào đây...",
+    dragAndDropHere: "Kéo và thả tệp SRT của bạn vào đây",
+    orClickToSelect: "hoặc nhấp để chọn",
     browsing: "Đang duyệt...",
     selectFile: "Chọn tệp",
     fileSelected: "Đã chọn tệp:",
@@ -48,7 +50,9 @@ const vi = {
     invalidFormat: "Định dạng tệp không hợp lệ. Vui lòng chọn tệp SRT.",
     noFileSelected: "Chưa chọn tệp",
     processingFile: "Đang xử lý tệp...",
-    successfullyParsed: "Đã phân tích thành công {count} phụ đề."
+    successfullyParsed: "Đã phân tích thành công {count} phụ đề.",
+    invalidFileType: "Loại tệp không hợp lệ. Vui lòng chọn tệp .srt.",
+    errorReadingFile: "Lỗi đọc tệp. Vui lòng thử lại."
   },
   translationSettings: {
     title: "Cài đặt dịch",
@@ -103,7 +107,17 @@ const vi = {
     bilingualDescription: "Xuất file SRT bao gồm cả phụ đề gốc và bản dịch",
     downloading: "Đang tải xuống...",
     noTranslatedSubtitles: "Không có phụ đề đã dịch để xuất."
-  }
+  },
+  preview: {
+    title: "Xem trước video",
+    description: "Tải lên video để xem trước với phụ đề",
+    uploadVideo: "Tải lên video để xem trước với phụ đề",
+    hideSubtitles: "Ẩn phụ đề",
+    showSubtitles: "Hiện phụ đề",
+    translatedOnly: "Bản dịch",
+    bilingual: "Song ngữ",
+    originalOnly: "Nguyên bản",
+  },
 };
 
 export default vi; 

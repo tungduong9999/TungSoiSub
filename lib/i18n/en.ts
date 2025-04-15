@@ -41,6 +41,8 @@ const en = {
     description: "Select an SRT subtitle file to translate",
     dragAndDrop: "Drag and drop an SRT file here, or click to select",
     dropFileHere: "Drop your SRT file here...",
+    dragAndDropHere: "Drag and drop your SRT file here",
+    orClickToSelect: "or click to select",
     browsing: "Browsing...",
     selectFile: "Select File",
     fileSelected: "File selected:",
@@ -48,7 +50,9 @@ const en = {
     invalidFormat: "Invalid file format. Please select an SRT file.",
     noFileSelected: "No file selected",
     processingFile: "Processing file...",
-    successfullyParsed: "Successfully parsed {count} subtitles."
+    successfullyParsed: "Successfully parsed {count} subtitles.",
+    invalidFileType: "Invalid file type. Please select a .srt file.",
+    errorReadingFile: "Error reading file. Please try again."
   },
   translationSettings: {
     title: "Translation Settings",
@@ -103,7 +107,17 @@ const en = {
     bilingualDescription: "Export SRT with both original and translated subtitles",
     downloading: "Downloading...",
     noTranslatedSubtitles: "No translated subtitles to export."
-  }
+  },
+  preview: {
+    title: "Video Preview",
+    description: "Upload a video file to preview with subtitles",
+    uploadVideo: "Upload a video to preview with subtitles",
+    hideSubtitles: "Hide Subtitles",
+    showSubtitles: "Show Subtitles",
+    translatedOnly: "Translated",
+    bilingual: "Bilingual",
+    originalOnly: "Original",
+  },
 };
 
 export default en; 

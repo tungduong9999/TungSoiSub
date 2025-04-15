@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { saveAs } from "file-saver";
 import { ChevronDown, ChevronUp, Globe, AlertCircle, PauseCircle, PlayCircle, StopCircle, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nContext";
+import SubtitlePreview from "@/components/SubtitlePreview";
 
 // Define subtitle item interface
 export interface SubtitleItem {
@@ -1113,6 +1114,16 @@ export default function SubtitleTranslator() {
               </CardContent>
             )}
           </Card>
+          
+          {/* Video Preview Section */}
+          {subtitles.length > 0 && (
+            <div className="mt-4">
+              <SubtitlePreview
+                subtitles={subtitles}
+                isTranslating={translating}
+              />
+            </div>
+          )}
         </>
       )}
     </div>
