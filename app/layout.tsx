@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SRT Subtitle Translator",
+  title: "SubtitleAI",
   description: "Translate subtitles from SRT files using Gemini AI",
 };
 

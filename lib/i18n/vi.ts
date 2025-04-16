@@ -1,7 +1,7 @@
 // Vietnamese translations
 const vi = {
   common: {
-    appTitle: "Dịch Phụ Đề SRT",
+    appTitle: "SubtitleAI",
     appDescription: "Dịch phụ đề từ tệp SRT sử dụng Gemini AI",
     loading: "Đang tải...",
     save: "Lưu",

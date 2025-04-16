@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { SubtitleItem } from "@/components/SubtitleTranslator";
 import ApiErrorDisplay from "@/components/ApiErrorDisplay";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ interface SubtitleTableProps {
   onUpdateTranslation: (id: number, translatedText: string) => void;
   translating: boolean;
   batchSize?: number;
+  highlightedSubtitleId?: number | null;
 }
 
 interface BatchGroup {
@@ -30,12 +31,73 @@ export default function SubtitleTable({
   onUpdateTranslation,
   translating,
   batchSize = 10,
+  highlightedSubtitleId
 }: SubtitleTableProps) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState<string>("");
   const [retryingBatch, setRetryingBatch] = useState<number | null>(null);
   const [expandedTable, setExpandedTable] = useState<boolean>(false);
+  const highlightedRowRef = useRef<HTMLTableRowElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+
+  // Cuộn đến dòng đang highlight khi highlightedSubtitleId thay đổi
+  useEffect(() => {
+    if (!highlightedSubtitleId || !tableContainerRef.current) return;
+    
+    // Sử dụng setTimeout để đảm bảo DOM đã cập nhật
+    setTimeout(() => {
+      const container = tableContainerRef.current;
+      if (!container) return; // Kiểm tra lại container sau setTimeout
+      
+      // Find the row element by ID - đảm bảo dùng querySelector trong container
+      const rowElement = container.querySelector(`#subtitle-row-${highlightedSubtitleId}`);
+      if (!rowElement) return;
+      
+      // Set the highlighted row reference
+      highlightedRowRef.current = rowElement as HTMLTableRowElement;
+      const row = highlightedRowRef.current;
+      
+      // Calculate if the row is visible in the viewport
+      const rowRect = row.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      
+      const rowTop = rowRect.top - containerRect.top + container.scrollTop;
+      const rowBottom = rowTop + row.offsetHeight;
+      
+      // Kiểm tra xem dòng có nằm hoàn toàn trong khung nhìn không
+      const isFullyVisible = (
+        rowTop >= container.scrollTop &&
+        rowBottom <= container.scrollTop + container.clientHeight
+      );
+      
+      // Only scroll if the row is not fully visible
+      if (!isFullyVisible) {
+        // Tính vị trí cuộn dựa vào vị trí của dòng
+        let targetScrollTop;
+        
+        if (rowTop < container.scrollTop) {
+          // Dòng nằm phía trên viewport - cuộn lên để hiển thị với padding
+          targetScrollTop = rowTop - 30;
+        } else if (rowBottom > container.scrollTop + container.clientHeight) {
+          // Dòng nằm phía dưới viewport - cuộn xuống để hiển thị với padding
+          targetScrollTop = rowBottom - container.clientHeight + 30;
+        } else {
+          // Dòng đã hiển thị một phần - căn giữa dòng
+          targetScrollTop = rowTop - (container.clientHeight / 2) + (row.offsetHeight / 2);
+        }
+        
+        // Đảm bảo không cuộn quá giới hạn
+        targetScrollTop = Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight));
+        
+        // Cuộn mượt đến vị trí
+        container.scrollTo({
+          top: targetScrollTop,
+          behavior: 'smooth'
+        });
+      }
+    }, 50); // Nhỏ delay để DOM cập nhật
+  }, [highlightedSubtitleId]);
 
   // Nhóm phụ đề theo batch
   const batches = useMemo(() => {
@@ -108,6 +170,20 @@ export default function SubtitleTable({
   // Get count of errors in batches
   const errorBatchCount = batches.filter(batch => batch.hasErrors).length;
 
+  // Handle clicking on a subtitle row to play it
+  const handleRowClick = (id: number) => {
+    if (id !== editingId && onRetry && !translating) {
+      // Only trigger if we're not already editing and not in the middle of translation
+      if (highlightedSubtitleId !== id) {
+        // Call onRetry (which actually sets the currentPlayingSubtitleId in parent)
+        onRetry(id);
+        
+        // Don't need additional scrolling code here as the useEffect will handle it
+        // when highlightedSubtitleId changes. This prevents double-scrolling.
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Batch error quick retry section */}
@@ -164,7 +240,29 @@ export default function SubtitleTable({
 
       {/* Subtitle table */}
       <div className="overflow-x-auto -mx-4 sm:mx-0">
-        <div className={`${expandedTable ? 'max-h-[800px]' : 'max-h-[400px]'} custom-scrollbar overflow-y-auto border border-gray-200 rounded-md transition-all duration-300`}>
+        <div 
+          ref={tableContainerRef}
+          className={`${expandedTable ? 'max-h-[800px]' : 'max-h-[400px]'} custom-scrollbar overflow-y-auto border border-gray-200 rounded-md transition-all duration-300 scroll-container`}
+        >
+          <style jsx>{`
+            tr.highlighted {
+              background-color: rgba(254, 240, 138, 0.4) !important;
+              border-left: 4px solid #f59e0b !important;
+            }
+            
+            tr.highlighted td:first-child {
+              padding-left: calc(1rem - 4px);
+            }
+            
+            @keyframes highlight-pulse {
+              0%, 100% { background-color: rgba(254, 240, 138, 0.4); }
+              50% { background-color: rgba(251, 191, 36, 0.2); }
+            }
+            
+            tr.highlighted {
+              animation: highlight-pulse 2s infinite;
+            }
+          `}</style>
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="bg-white border-b border-gray-200">
@@ -180,13 +278,22 @@ export default function SubtitleTable({
               {subtitles.map((subtitle, index) => {
                 const batchIndex = Math.floor((subtitle.id - 1) / batchSize);
                 const isEven = index % 2 === 0;
+                const isPlaying = subtitle.id === highlightedSubtitleId;
                 
                 return (
-                  <tr key={subtitle.id} className={`
-                    ${isEven ? 'bg-white' : 'bg-gray-50/50'} 
-                    ${retryingBatch === batchIndex && subtitle.status === "translating" ? "bg-blue-50/70" : ""}
-                    hover:bg-blue-50/30 transition-colors border-b border-gray-100
-                  `}>
+                  <tr 
+                    key={subtitle.id} 
+                    id={`subtitle-row-${subtitle.id}`}
+                    ref={isPlaying ? highlightedRowRef : null}
+                    onClick={() => handleRowClick(subtitle.id)}
+                    className={`
+                      ${isEven ? 'bg-white' : 'bg-gray-50/50'} 
+                      ${retryingBatch === batchIndex && subtitle.status === "translating" ? "bg-blue-50/70" : ""}
+                      ${isPlaying ? "highlighted" : ""}
+                      hover:bg-blue-50/30 transition-colors border-b border-gray-100
+                      ${editingId !== subtitle.id ? "cursor-pointer" : ""}
+                    `}
+                  >
                     <td className="px-4 py-2 align-top text-gray-700">
                       {subtitle.id}
                       {subtitle.id % batchSize === 1 && (

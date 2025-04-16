@@ -12,9 +12,20 @@ import { Upload, Clock } from "lucide-react";
 interface SubtitlePreviewProps {
   subtitles: SubtitleItem[];
   isTranslating: boolean;
+  onSubtitleChange?: (subtitleId: number | null) => void;
+  currentPlayingSubtitleId?: number | null;
+  selectedMode?: 'default' | 'sidebyside';
+  onModeChange?: (mode: 'default' | 'sidebyside') => void;
 }
 
-export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePreviewProps) {
+export default function SubtitlePreview({ 
+  subtitles, 
+  isTranslating, 
+  onSubtitleChange,
+  currentPlayingSubtitleId,
+  selectedMode,
+  onModeChange
+}: SubtitlePreviewProps) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -28,6 +39,7 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
   const [vttUrl, setVttUrl] = useState<string | null>(null);
   const [originalVttUrl, setOriginalVttUrl] = useState<string | null>(null);
   const [bilingualVttUrl, setBilingualVttUrl] = useState<string | null>(null);
+  const [activeSubtitleId, setActiveSubtitleId] = useState<number | null>(null);
 
   // Hàm chuyển đổi phụ đề sang định dạng WebVTT
   const convertSubtitlesToVTT = (
@@ -203,9 +215,51 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
   // Cập nhật thời gian hiện tại của video khi phát
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
+      const currentTime = videoRef.current.currentTime;
+      setCurrentTime(currentTime);
+      
+      // Tìm phụ đề hiện tại dựa trên thời gian video
+      updateActiveSubtitle(currentTime);
     }
   };
+  
+  // Hàm riêng để cập nhật subtitle đang hoạt động
+  const updateActiveSubtitle = (currentTime: number) => {
+    if (subtitles.length === 0) return;
+    
+    // Tìm phụ đề đang hiển thị
+    const activeSubtitle = subtitles.find(sub => {
+      const startTime = timeToSeconds(sub.startTime);
+      const endTime = timeToSeconds(sub.endTime);
+      // Mở rộng thêm một chút biên độ để tránh trường hợp sát ranh giới
+      return currentTime >= startTime - 0.1 && currentTime <= endTime + 0.1;
+    });
+    
+    // Cập nhật active subtitle ID
+    const newActiveId = activeSubtitle?.id || null;
+    if (newActiveId !== activeSubtitleId) {
+      setActiveSubtitleId(newActiveId);
+      // Gọi callback để thông báo cho component cha
+      if (onSubtitleChange) {
+        onSubtitleChange(newActiveId);
+      }
+    }
+  };
+  
+  // Thiết lập interval để theo dõi thời gian video thường xuyên hơn
+  useEffect(() => {
+    if (!videoRef.current || !videoUrl || subtitles.length === 0) return;
+    
+    // Kiểm tra thời gian hiện tại và cập nhật subtitle đang hoạt động mỗi 100ms
+    const intervalId = setInterval(() => {
+      if (videoRef.current && !videoRef.current.paused) {
+        const currentTime = videoRef.current.currentTime;
+        updateActiveSubtitle(currentTime);
+      }
+    }, 100);
+    
+    return () => clearInterval(intervalId);
+  }, [videoUrl, subtitles]);
 
   // Chuyển đổi thời gian từ định dạng "00:00:00,000" sang giây
   const timeToSeconds = (timeString: string): number => {
@@ -221,6 +275,34 @@ export default function SubtitlePreview({ subtitles, isTranslating }: SubtitlePr
     const s = Math.floor(seconds % 60);
     return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
   };
+
+  useEffect(() => {
+    // Sync with external currentPlayingSubtitleId if provided
+    if (currentPlayingSubtitleId !== undefined && 
+        currentPlayingSubtitleId !== activeSubtitleId) {
+      setActiveSubtitleId(currentPlayingSubtitleId);
+      
+      // If we have a video loaded, try to seek to the timestamp of this subtitle
+      if (videoRef.current && videoUrl && currentPlayingSubtitleId) {
+        const subtitle = subtitles.find(sub => sub.id === currentPlayingSubtitleId);
+        if (subtitle) {
+          const startTime = timeToSeconds(subtitle.startTime);
+          
+          // Set a flag to avoid triggering onSubtitleChange during the programmatic seek
+          const isProgrammaticSeek = true;
+          
+          // Start a short delayed playback after seeking
+          videoRef.current.currentTime = startTime;
+          
+          // Optionally auto-play after seeking
+          videoRef.current.play().catch(err => {
+            // Auto-play might be blocked by browser policy, that's fine
+            console.log("Auto-play after seeking failed:", err);
+          });
+        }
+      }
+    }
+  }, [currentPlayingSubtitleId, subtitles, videoUrl]);
 
   return (
     <div className="space-y-3">

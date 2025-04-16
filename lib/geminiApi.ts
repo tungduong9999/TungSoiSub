@@ -9,6 +9,9 @@ const rateLimiter = new RateLimiter(2000, 3, 2);
 // Biến lưu trữ API key hiện tại
 let currentApiKey = "";
 
+// Biến lưu trữ model hiện tại
+let currentModel = "gemini-2.0-flash-exp"; // Default model
+
 /**
  * Cập nhật API key mới
  * @param apiKey API key mới
@@ -23,6 +26,22 @@ export function setApiKey(apiKey: string) {
  */
 export function getApiKey(): string {
   return currentApiKey;
+}
+
+/**
+ * Cập nhật model mới
+ * @param model Model ID mới
+ */
+export function setModel(model: string) {
+  currentModel = model;
+}
+
+/**
+ * Lấy model hiện tại
+ * @returns Model ID hiện tại
+ */
+export function getModel(): string {
+  return currentModel;
 }
 
 // Initialize Gemini API
@@ -46,6 +65,7 @@ export interface TranslateOptions {
   targetLanguage: string;
   prompt: string;
   context?: string;
+  model?: string; // Model ID có thể được chỉ định từ bên ngoài
 }
 
 /**
@@ -56,7 +76,8 @@ export async function translateWithGemini({
   texts,
   targetLanguage,
   prompt,
-  context = ""
+  context = "",
+  model
 }: TranslateOptions): Promise<TranslationResult[]> {
   try {
     // Kiểm tra xem API key đã được cung cấp chưa
@@ -67,7 +88,9 @@ export async function translateWithGemini({
     // Use the rate limiter to execute the API call
     return await rateLimiter.execute(async () => {
       const genAI = getGeminiClient();
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+      // Sử dụng model được chỉ định từ bên ngoài hoặc model mặc định
+      const modelToUse = model || currentModel;
+      const modelInstance = genAI.getGenerativeModel({ model: modelToUse });
 
       // Safety settings
       const safetySettings = [
@@ -101,7 +124,7 @@ export async function translateWithGemini({
           }));
           
           // Gọi API với nhiều prompt (nhiều câu hỏi) trong một request
-          const result = await model.generateContentStream({ 
+          const result = await modelInstance.generateContentStream({ 
             contents: formattedPrompts,
             safetySettings,
             generationConfig: {
@@ -141,7 +164,7 @@ export async function translateWithGemini({
 
           // Gọi API riêng cho từng prompt và kết hợp kết quả
           const translationPromises = prompts.map(promptText => 
-            model.generateContent({
+            modelInstance.generateContent({
               contents: [{ role: "user", parts: [{ text: promptText }] }],
               safetySettings,
               generationConfig: {
@@ -190,7 +213,7 @@ Here are the texts to translate:
 ${JSON.stringify(texts)}`;
 
       // Call the Gemini API
-      const result = await model.generateContent({
+      const result = await modelInstance.generateContent({
         contents: [{ role: "user", parts: [{ text: promptTemplate }] }],
         safetySettings,
         generationConfig: {
