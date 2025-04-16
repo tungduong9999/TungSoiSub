@@ -148,3 +148,129 @@
     @apply bg-gray-400;
   }
 }
+
+/* Custom styles for guide page */
+.guide-sidebar {
+  width: 100%;
+  background-color: white;
+  border-radius: 0.625rem;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  height: 100%;
+  overflow-y: auto;
+}
+
+.guide-sidebar-content {
+  width: 100%;
+}
+
+.guide-toc-nav {
+  max-height: calc(100vh - 220px);
+  overflow-y: auto;
+  padding-right: 8px;
+  width: 100%;
+}
+
+.guide-sidebar-container {
+  position: sticky;
+  top: 85px;
+  height: calc(100vh - 120px);
+  display: block;
+}
+
+.guide-toc-item {
+  border-radius: 0.375rem;
+  transition: all 0.2s ease;
+  width: 100%;
+  display: block;
+}
+
+.guide-toc-item.active {
+  background-color: #EBF5FF;
+  color: #1E40AF;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.guide-toc-item:hover:not(.active) {
+  background-color: #F3F4F6;
+}
+
+.guide-back-button {
+  position: sticky;
+  top: 80px;
+  z-index: 40;
+  background: linear-gradient(to bottom, rgb(249 250 251) 70%, transparent);
+  padding: 12px 0;
+  margin-bottom: 16px;
+}
+
+/* Print styles */
+@media print {
+  /* Basic print optimization */
+  @page {
+    size: A4;
+    margin: 1.5cm;
+  }
+  
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+    background: #fff;
+    color: #000;
+  }
+  
+  /* Remove box shadows and backgrounds */
+  .card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #ddd;
+    margin-bottom: 20px;
+  }
+  
+  /* Improve typography for print */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid;
+    break-after: avoid;
+  }
+  
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+  
+  /* Full width images and tables */
+  img, table {
+    max-width: 100% !important;
+  }
+  
+  /* Hide UI elements that don't make sense in print */
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  /* Add URLs after links for print version */
+  a[href^="http"]:after {
+    content: " (" attr(href) ")";
+    font-size: 90%;
+    color: #333;
+  }
+  
+  /* Ensure page breaks don't occur inside cards */
+  .card, .section {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  
+  /* Improve spacing */
+  .space-y-4 > * + * {
+    margin-top: 16pt !important;
+  }
+  
+  /* Ensure dark backgrounds are printed properly */
+  .bg-blue-50\/50, .bg-amber-50, .bg-blue-50, .bg-gray-50 {
+    background-color: #f9f9f9 !important;
+    border: 1px solid #eee !important;
+  }
+}

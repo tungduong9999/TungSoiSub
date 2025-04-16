@@ -5,6 +5,8 @@ import TranslatorSkeleton from '@/components/TranslatorSkeleton';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n/I18nContext';
 import { useSessionTracking } from '@/lib/analytics';
+import Link from 'next/link';
+import { BookOpen } from 'lucide-react';
 
 // Import the SubtitleTranslator component dynamically with SSR disabled
 const SubtitleTranslator = dynamic(
@@ -34,7 +36,11 @@ export default function Home() {
               {t('common.appDescription')}
             </p>
           </div>
-          <div className="ml-4 flex-shrink-0">
+          <div className="ml-4 flex items-center gap-4">
+            <Link href="/guide" className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors">
+              <BookOpen className="h-4 w-4 mr-1" />
+              {t('guide.title')}
+            </Link>
             <LanguageSwitcher />
           </div>
         </div>
