@@ -82,7 +82,12 @@ const en = {
     expandTable: "Expand table",
     collapseTable: "Collapse table",
     waitingToTranslate: "Waiting to translate...",
-    translating: "Translating..."
+    translating: "Translating...",
+    aiSuggestions: "AI Suggestions",
+    chooseSuggestion: "Choose a better translation",
+    clickToApply: "Click to apply",
+    noSuggestions: "No suggestions available",
+    suggestBetterTranslation: "Suggest better translation"
   },
   batchErrorDisplay: {
     failedBatches: "{count} failed {batches}",
@@ -96,10 +101,11 @@ const en = {
     fileRequired: "Please select an SRT file to translate.",
     translationError: "Translation Error",
     translationErrorDescription: "An error occurred during translation:",
-    rateLimit: "Rate limit exceeded. Please wait a moment before trying again.",
+    rateLimit: "Rate limit exceeded. Please wait a moment before retrying.",
     forbidden: "API access forbidden. Please check your API key.",
-    unauthorized: "Unauthorized API access. Your API key might be invalid.",
-    serverError: "Server error from Gemini API. Please try again later."
+    unauthorized: "Unauthorized API access. Your API key may be invalid.",
+    serverError: "Server error from Gemini API. Please try again later.",
+    translationSuggestionFailed: "Could not generate AI suggestions. Please try again."
   },
   export: {
     exportTranslated: "Export Translated SRT",

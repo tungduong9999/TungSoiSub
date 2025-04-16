@@ -5,7 +5,7 @@ import { SubtitleItem } from "@/components/SubtitleTranslator";
 import ApiErrorDisplay from "@/components/ApiErrorDisplay";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Loader2, Edit, RotateCw, ChevronUp, ChevronDown } from "lucide-react";
+import { AlertTriangle, Loader2, Edit, RotateCw, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nContext";
 
 interface SubtitleTableProps {
@@ -16,6 +16,7 @@ interface SubtitleTableProps {
   translating: boolean;
   batchSize?: number;
   highlightedSubtitleId?: number | null;
+  onSuggestTranslation?: (id: number, originalText: string, currentTranslation: string) => Promise<string[]>;
 }
 
 interface BatchGroup {
@@ -31,7 +32,8 @@ export default function SubtitleTable({
   onUpdateTranslation,
   translating,
   batchSize = 10,
-  highlightedSubtitleId
+  highlightedSubtitleId,
+  onSuggestTranslation
 }: SubtitleTableProps) {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -40,6 +42,11 @@ export default function SubtitleTable({
   const [expandedTable, setExpandedTable] = useState<boolean>(false);
   const highlightedRowRef = useRef<HTMLTableRowElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  
+  // State cho tính năng gợi ý bản dịch
+  const [suggestingId, setSuggestingId] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
 
   // Cuộn đến dòng đang highlight khi highlightedSubtitleId thay đổi
   useEffect(() => {
@@ -184,6 +191,59 @@ export default function SubtitleTable({
     }
   };
 
+  // Xử lý yêu cầu gợi ý bản dịch
+  const handleSuggestTranslation = async (id: number, originalText: string, currentTranslation: string) => {
+    if (!onSuggestTranslation) return;
+    
+    setSuggestingId(id);
+    setLoadingSuggestions(true);
+    
+    try {
+      // Gọi hàm callback từ component cha để lấy các gợi ý từ AI
+      const aiSuggestions = await onSuggestTranslation(id, originalText, currentTranslation);
+      
+      // Parse the response if it's in code block format
+      if (aiSuggestions.length === 1 && aiSuggestions[0].includes("```json")) {
+        try {
+          // Extract the JSON from the code block
+          const jsonMatch = aiSuggestions[0].match(/```json\s*([\s\S]*?)\s*```/);
+          if (jsonMatch && jsonMatch[1]) {
+            const jsonData = JSON.parse(jsonMatch[1]);
+            // Use translations array if it exists
+            if (jsonData.translations && Array.isArray(jsonData.translations)) {
+              setSuggestions(jsonData.translations);
+              return;
+            }
+          }
+        } catch (parseError) {
+          console.error("Error parsing JSON in suggestion:", parseError);
+          // Fall back to using the raw response
+        }
+      }
+      
+      setSuggestions(aiSuggestions);
+    } catch (error) {
+      console.error("Error getting translation suggestions:", error);
+      setSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+  
+  // Áp dụng gợi ý được chọn
+  const applyTranslationSuggestion = (suggestion: string) => {
+    if (suggestingId === null) return;
+    
+    onUpdateTranslation(suggestingId, suggestion);
+    closeSuggestions();
+  };
+  
+  // Đóng panel gợi ý
+  const closeSuggestions = () => {
+    setSuggestingId(null);
+    setSuggestions([]);
+  };
+
   return (
     <div className="space-y-4">
       {/* Batch error quick retry section */}
@@ -245,22 +305,65 @@ export default function SubtitleTable({
           className={`${expandedTable ? 'max-h-[800px]' : 'max-h-[400px]'} custom-scrollbar overflow-y-auto border border-gray-200 rounded-md transition-all duration-300 scroll-container`}
         >
           <style jsx>{`
-            tr.highlighted {
-              background-color: rgba(254, 240, 138, 0.4) !important;
-              border-left: 4px solid #f59e0b !important;
-            }
-            
-            tr.highlighted td:first-child {
-              padding-left: calc(1rem - 4px);
-            }
-            
             @keyframes highlight-pulse {
               0%, 100% { background-color: rgba(254, 240, 138, 0.4); }
               50% { background-color: rgba(251, 191, 36, 0.2); }
             }
             
             tr.highlighted {
+              background-image: linear-gradient(to right, #f59e0b 4px, rgba(254, 240, 138, 0.4) 4px) !important;
               animation: highlight-pulse 2s infinite;
+            }
+            
+            .suggestion-panel {
+              position: absolute;
+              right: 20px;
+              background-color: white;
+              border: 1px solid #e5e7eb;
+              border-radius: 0.5rem;
+              box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+              z-index: 50;
+              width: 350px;
+              overflow: hidden;
+            }
+            
+            .suggestion-option {
+              border-bottom: 1px solid #f3f4f6;
+              padding: 0.75rem;
+              cursor: pointer;
+              transition: background-color 0.2s;
+            }
+            
+            .suggestion-option:hover {
+              background-color: #f9fafb;
+            }
+            
+            .suggestion-option:last-child {
+              border-bottom: none;
+            }
+            
+            .suggestion-label {
+              display: inline-block;
+              font-size: 0.65rem;
+              font-weight: 500;
+              padding: 0.15rem 0.4rem;
+              border-radius: 0.25rem;
+              margin-bottom: 0.35rem;
+            }
+            
+            .label-common {
+              background-color: #e0f2fe;
+              color: #0369a1;
+            }
+            
+            .label-academic {
+              background-color: #f3e8ff;
+              color: #7e22ce;
+            }
+            
+            .label-creative {
+              background-color: #fef3c7;
+              color: #b45309;
             }
           `}</style>
           <table className="w-full border-collapse text-sm">
@@ -279,6 +382,7 @@ export default function SubtitleTable({
                 const batchIndex = Math.floor((subtitle.id - 1) / batchSize);
                 const isEven = index % 2 === 0;
                 const isPlaying = subtitle.id === highlightedSubtitleId;
+                const isShowingSuggestions = subtitle.id === suggestingId;
                 
                 return (
                   <tr 
@@ -308,7 +412,7 @@ export default function SubtitleTable({
                     <td className="px-4 py-2 align-top text-gray-600">
                       <div className="max-w-xs whitespace-pre-wrap break-words text-sm max-h-[120px] custom-scrollbar">{subtitle.text}</div>
                     </td>
-                    <td className="px-4 py-2 align-top text-gray-800">
+                    <td className="px-4 py-2 align-top text-gray-800 relative">
                       {editingId === subtitle.id ? (
                         <div className="space-y-2">
                           <Textarea
@@ -336,6 +440,81 @@ export default function SubtitleTable({
                                 <span className="text-gray-400 italic text-sm">{t('subtitleTable.waitingToTranslate')}</span> : 
                                 <span className="text-blue-400 italic text-sm">{t('subtitleTable.translating')}</span>
                               )}
+                              
+                          {/* Panel hiển thị các gợi ý */}
+                          {isShowingSuggestions && (
+                            <div className="suggestion-panel" onClick={(e) => e.stopPropagation()}>
+                              <div className="px-3 py-2 bg-blue-50 border-b border-blue-100">
+                                <div className="flex justify-between items-center">
+                                  <h4 className="text-sm font-medium text-blue-800 flex items-center">
+                                    <Sparkles className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
+                                    {t('subtitleTable.aiSuggestions')}
+                                  </h4>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 rounded-full"
+                                    onClick={closeSuggestions}
+                                  >
+                                    &times;
+                                  </Button>
+                                </div>
+                                <p className="text-xs text-blue-600 mt-1">
+                                  {t('subtitleTable.chooseSuggestion')}
+                                </p>
+                              </div>
+                              
+                              {loadingSuggestions ? (
+                                <div className="py-8 text-center">
+                                  <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin text-blue-500" />
+                                  <p className="text-sm text-gray-500">{t('common.loading')}</p>
+                                </div>
+                              ) : suggestions.length > 0 ? (
+                                <div>
+                                  {suggestions.map((suggestion, idx) => {
+                                    // Xác định loại gợi ý dựa vào index
+                                    const labelType = idx === 0 ? "common" : 
+                                                     idx === 1 ? "academic" : "creative";
+                                    const labelText = idx === 0 ? "Thông dụng" : 
+                                                    idx === 1 ? "Học thuật" : "Sáng tạo";
+                                    
+                                    return (
+                                      <div 
+                                        key={`suggestion-${idx}`} 
+                                        className="suggestion-option hover:bg-gray-50"
+                                        onClick={() => applyTranslationSuggestion(suggestion)}
+                                      >
+                                        <div className={`suggestion-label label-${labelType}`}>
+                                          {labelText}
+                                        </div>
+                                        <p className="text-sm text-gray-800 whitespace-pre-wrap">{suggestion}</p>
+                                        <div className="flex justify-between items-center mt-2">
+                                          <p className="text-xs text-blue-500">
+                                            {t('subtitleTable.clickToApply')}
+                                          </p>
+                                          <Button 
+                                            size="sm" 
+                                            variant="ghost"
+                                            className="h-6 text-xs py-0 px-2"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              applyTranslationSuggestion(suggestion);
+                                            }}
+                                          >
+                                            Áp dụng
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="py-4 text-center">
+                                  <p className="text-sm text-gray-500">{t('subtitleTable.noSuggestions')}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
@@ -346,16 +525,35 @@ export default function SubtitleTable({
                       {subtitle.status !== "translating" && editingId !== subtitle.id && (
                         <div className="flex justify-end gap-1">
                           {subtitle.status === "translated" && (
-                            <Button 
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleEdit(subtitle.id, subtitle.translatedText)}
-                              disabled={translating}
-                              className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              title={t('common.edit')}
-                            >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
+                            <>
+                              <Button 
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleEdit(subtitle.id, subtitle.translatedText)}
+                                disabled={translating}
+                                className="h-7 w-7 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                title={t('common.edit')}
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              
+                              {/* Nút gợi ý bản dịch từ AI */}
+                              {onSuggestTranslation && (
+                                <Button 
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSuggestTranslation(subtitle.id, subtitle.text, subtitle.translatedText);
+                                  }}
+                                  disabled={translating || loadingSuggestions}
+                                  className="h-7 w-7 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  title={t('subtitleTable.suggestBetterTranslation')}
+                                >
+                                  <Sparkles className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </>
                           )}
                           {subtitle.status === "error" && (
                             <Button 

@@ -72,6 +72,9 @@ export default function SubtitleTranslator() {
     const [layoutMode, setLayoutMode] = useState<'default' | 'sidebyside'>('default');
     const [currentPlayingSubtitleId, setCurrentPlayingSubtitleId] = useState<number | null>(null);
     const subtitleTableRef = useRef<HTMLDivElement>(null);
+    const [currentTranslatingItemId, setCurrentTranslatingItemId] = useState<number | null>(null);
+    const [alertMessage, setAlertMessage] = useState<string | null>(null);
+    const [showAlert, setShowAlert] = useState<boolean>(false);
 
     // Cập nhật pauseStateRef khi isPaused thay đổi
     useEffect(() => {
@@ -804,6 +807,73 @@ export default function SubtitleTranslator() {
         }
     };
 
+    // Thêm hàm xử lý gợi ý dịch thuật
+    const handleSuggestBetterTranslation = async (id: number, originalText: string, currentTranslation: string) => {
+        if (!getApiKey()) {
+            setValidationError(t('errors.apiKeyRequired'));
+            return [];
+        }
+
+        try {
+            // Xác định ngôn ngữ nguồn dựa trên ngôn ngữ đích
+            const sourceLanguage = targetLanguage === "Vietnamese" ? "English" : "Vietnamese";
+            
+            // Tạo prompt riêng cho gợi ý bản dịch tốt hơn
+            const suggestPrompt = `Hãy đưa ra 3 phiên bản dịch HOÀN TOÀN KHÁC NHAU cho đoạn văn bản sau, mỗi phiên bản với phong cách và cách diễn đạt riêng biệt.
+
+- Văn bản gốc (${sourceLanguage}): "${originalText}"
+- Bản dịch hiện tại (${targetLanguage}): "${currentTranslation}"
+
+Yêu cầu cụ thể cho mỗi phiên bản:
+
+1. PHIÊN BẢN THÔNG DỤNG: Ngôn ngữ tự nhiên, dễ hiểu cho số đông người xem. Sử dụng từ ngữ phổ thông, đơn giản mà vẫn diễn đạt đầy đủ ý nghĩa.
+
+2. PHIÊN BẢN HỌC THUẬT: Sát nghĩa với văn bản gốc, sử dụng thuật ngữ chính xác và ngôn ngữ trang trọng. Diễn đạt chặt chẽ về mặt ngữ nghĩa và cú pháp.
+
+3. PHIÊN BẢN SÁNG TẠO: Tự do hơn về mặt diễn đạt, có thể dùng thành ngữ, cách nói địa phương hoặc biểu đạt hiện đại. Truyền tải không chỉ nội dung mà còn cảm xúc và tinh thần của văn bản gốc.
+
+Đảm bảo ba phiên bản phải ĐỦ KHÁC BIỆT để người dùng có những lựa chọn đa dạng. Trả về chính xác 3 phiên bản, mỗi phiên bản trên một dòng, không có đánh số, không có giải thích.`;
+
+            // Đánh dấu đang dịch phụ đề này
+            setCurrentTranslatingItemId(id);
+            
+            // Gọi API Gemini để lấy gợi ý
+            const response = await translateWithGemini({
+                texts: [originalText],
+                targetLanguage,
+                prompt: suggestPrompt,
+                model: selectedModel
+            });
+            
+            if (response[0]?.error) {
+                throw new Error(response[0].error);
+            }
+            
+            let suggestions: string[] = [];
+            for(let i = 0; i < 3; i++) {
+                suggestions.push(response[i]?.text);
+            }
+            
+            // Nếu vẫn không tìm thấy, trả về bản dịch hiện tại
+            if (suggestions.length === 0) {
+                suggestions.push(currentTranslation);
+            }
+            
+            // Đảm bảo luôn có đủ 3 phiên bản
+            while (suggestions.length < 3) {
+                suggestions.push(currentTranslation);
+            }
+            
+            return suggestions;
+        } catch (error) {
+            console.error("Error suggesting better translations:", error);
+            setValidationError(t('errors.translationSuggestionFailed'));
+            return [currentTranslation];
+        } finally {
+            setCurrentTranslatingItemId(null);
+        }
+    };
+
     return (
         <div className="container mx-auto px-4 py-8 max-w-7xl">
             <div className="space-y-4">
@@ -1175,7 +1245,9 @@ export default function SubtitleTranslator() {
                                                     onRetryBatch={handleRetryBatch}
                                                     onUpdateTranslation={handleUpdateSubtitle}
                                                     translating={translating}
+                                                    batchSize={BATCH_SIZE}
                                                     highlightedSubtitleId={currentPlayingSubtitleId}
+                                                    onSuggestTranslation={handleSuggestBetterTranslation}
                                                 />
                                             ) : (
                                                 <div className="text-center py-10 text-gray-500">

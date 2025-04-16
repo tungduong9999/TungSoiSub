@@ -82,7 +82,12 @@ const vi = {
     expandTable: "Mở rộng bảng",
     collapseTable: "Thu gọn bảng",
     waitingToTranslate: "Đang chờ dịch...",
-    translating: "Đang dịch..."
+    translating: "Đang dịch...",
+    aiSuggestions: "Gợi ý từ AI",
+    chooseSuggestion: "Chọn một bản dịch phù hợp hơn",
+    clickToApply: "Nhấn để áp dụng",
+    noSuggestions: "Không có gợi ý nào",
+    suggestBetterTranslation: "Gợi ý bản dịch tốt hơn"
   },
   batchErrorDisplay: {
     failedBatches: "{count} nhóm {batches} thất bại",
@@ -99,7 +104,8 @@ const vi = {
     rateLimit: "Đã vượt quá giới hạn tần suất. Vui lòng đợi một lát trước khi thử lại.",
     forbidden: "Truy cập API bị cấm. Vui lòng kiểm tra khóa API của bạn.",
     unauthorized: "Truy cập API không được ủy quyền. Khóa API của bạn có thể không hợp lệ.",
-    serverError: "Lỗi máy chủ từ API Gemini. Vui lòng thử lại sau."
+    serverError: "Lỗi máy chủ từ API Gemini. Vui lòng thử lại sau.",
+    translationSuggestionFailed: "Không thể tạo gợi ý từ AI. Vui lòng thử lại."
   },
   export: {
     exportTranslated: "Xuất SRT đã dịch",
