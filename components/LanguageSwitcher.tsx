@@ -10,9 +10,23 @@ import {
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
 import { Globe } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 export default function LanguageSwitcher() {
   const { locale, setLocale } = useI18n();
+
+  const handleLanguageChange = (newLocale: Locale) => {
+    // Chỉ theo dõi khi ngôn ngữ thực sự thay đổi
+    if (newLocale !== locale) {
+      trackEvent('language_change', {
+        from: locale,
+        to: newLocale
+      });
+    }
+    
+    // Cập nhật ngôn ngữ
+    setLocale(newLocale);
+  };
 
   return (
     <DropdownMenu>
@@ -30,7 +44,7 @@ export default function LanguageSwitcher() {
         {Object.entries(localeNames).map(([key, name]) => (
           <DropdownMenuItem 
             key={key}
-            onClick={() => setLocale(key as Locale)}
+            onClick={() => handleLanguageChange(key as Locale)}
             className={`px-3 py-2 ${locale === key ? "bg-primary/5 font-medium" : ""}`}
           >
             <div className="flex items-center">

@@ -113,7 +113,10 @@ export default function SubtitleTable({
     // Nhóm phụ đề theo batch
     for (let i = 0; i < subtitles.length; i += batchSize) {
       const batchItems = subtitles.slice(i, i + batchSize);
-      const batchIndex = Math.floor(i / batchSize);
+      
+      // Lấy ID đầu tiên và tính batchIndex từ ID
+      const firstId = batchItems[0]?.id || 0;
+      const batchIndex = Math.floor((firstId - 1) / batchSize);
       
       result.push({
         batchIndex,
@@ -148,9 +151,33 @@ export default function SubtitleTable({
   const handleRetryBatch = async (batchIndex: number) => {
     if (!onRetryBatch) return;
     
+    console.log(`SubtitleTable: Retrying batch ${batchIndex}`);
     setRetryingBatch(batchIndex);
+    
     try {
+      // Kiểm tra trước xem batch có tồn tại không
+      const batchExistsInUI = batches.some(batch => {
+        const firstId = batch.items[0]?.id;
+        // Sử dụng cách tính nhất quán với các component khác
+        const actualBatchIndex = Math.floor((firstId - 1) / batchSize);
+        console.log('actualBatchIndex:: ' + actualBatchIndex);
+        console.log('batchIndex:: ' + batchIndex);
+        console.log('batch.hasErrors:: ' + batch.hasErrors);
+        return actualBatchIndex === batchIndex && batch.hasErrors;
+      });
+      
+      if (!batchExistsInUI) {
+        console.warn(`Batch ${batchIndex} không còn tồn tại hoặc không có lỗi trong UI`);
+        // Refresh UI
+        setRetryingBatch(null);
+        return;
+      }
+      
       await onRetryBatch(batchIndex);
+      console.log(`SubtitleTable: Successfully retried batch ${batchIndex}`);
+    } catch (error) {
+      console.error(`SubtitleTable: Error retrying batch ${batchIndex}:`, error);
+      // Hiển thị thông báo lỗi cho người dùng nếu cần
     } finally {
       setRetryingBatch(null);
     }
@@ -258,40 +285,67 @@ export default function SubtitleTable({
               </p>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1">
-                {batches.filter(batch => batch.hasErrors).map(batch => {
-                  const errorCount = batch.items.filter(item => item.status === "error").length;
-                  const firstId = batch.items[0]?.id;
-                  const lastId = batch.items[batch.items.length - 1]?.id;
-                  const isRetrying = retryingBatch === batch.batchIndex;
-                  
-                  return (
-                    <div key={`batch-${batch.batchIndex}`} className="flex items-center justify-between py-1 px-2 bg-white border border-amber-100 rounded text-sm">
-                      <div className="truncate">
-                        <span className="font-medium">{t('subtitleTable.batch')} {batch.batchIndex + 1}:</span> #{firstId}-{lastId}
-                        <span className="ml-1 text-rose-600 text-xs">({errorCount} {t('subtitleTable.errors')})</span>
+                {batches
+                  .filter(batch => {
+                    // Kiểm tra kỹ hơn xem batch có thực sự có lỗi không
+                    // và các subtitle trong batch có còn trong danh sách hiện tại không
+                    if (!batch || !batch.items || batch.items.length === 0) return false;
+                    
+                    // Kiểm tra xem batch này có thực sự có các subtitle lỗi không
+                    const hasRealErrors = batch.items.some(item => {
+                      const subtitle = subtitles.find(s => s.id === item.id);
+                      return subtitle && subtitle.status === "error";
+                    });
+                    
+                    return hasRealErrors;
+                  })
+                  .map(batch => {
+                    // Đếm số lỗi thực tế (có thể một số đã được sửa)
+                    const errorItems = batch.items.filter(item => {
+                      const subtitle = subtitles.find(s => s.id === item.id);
+                      return subtitle && subtitle.status === "error";
+                    });
+                    
+                    const errorCount = errorItems.length;
+                    
+                    // Nếu không còn lỗi nào, không hiển thị batch này
+                    if (errorCount === 0) return null;
+                    
+                    const firstId = batch.items[0]?.id;
+                    const lastId = batch.items[batch.items.length - 1]?.id;
+                    // Tính toán lại batchIndex dựa trên ID đầu tiên
+                    const actualBatchIndex = Math.floor((firstId - 1) / batchSize);
+                    const isRetrying = retryingBatch === actualBatchIndex;
+                    
+                    return (
+                      <div key={`batch-${actualBatchIndex}`} className="flex items-center justify-between py-1 px-2 bg-white border border-amber-100 rounded text-sm">
+                        <div className="truncate">
+                          <span className="font-medium">{t('subtitleTable.batch')} {actualBatchIndex + 1}:</span> #{firstId}-{lastId}
+                          <span className="ml-1 text-rose-600 text-xs">({errorCount} {t('subtitleTable.errors')})</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRetryBatch(actualBatchIndex)}
+                          disabled={isRetrying || translating}
+                          className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-100"
+                        >
+                          {isRetrying ? (
+                            <>
+                              <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                              {t('common.retrying')}
+                            </>
+                          ) : (
+                            <>
+                              <RotateCw className="h-3 w-3 mr-1" />
+                              {t('common.retry')}
+                            </>
+                          )}
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleRetryBatch(batch.batchIndex)}
-                        disabled={isRetrying || translating}
-                        className="h-6 px-2 text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-100"
-                      >
-                        {isRetrying ? (
-                          <>
-                            <Loader2 className="animate-spin h-3 w-3 mr-1" />
-                            {t('common.retrying')}
-                          </>
-                        ) : (
-                          <>
-                            <RotateCw className="h-3 w-3 mr-1" />
-                            {t('common.retry')}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                  .filter(Boolean) /* Loại bỏ các phần tử null */}
               </div>
             </div>
           </div>

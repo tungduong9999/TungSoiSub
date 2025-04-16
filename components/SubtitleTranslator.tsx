@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { parse, stringify } from "@/lib/srtUtils";
 import { translateWithGemini, setApiKey, getApiKey, setModel, getModel } from "@/lib/geminiApi";
 import type { TranslationResult } from "@/lib/geminiApi";
 import SubtitleTable from "@/components/SubtitleTable";
@@ -19,13 +18,26 @@ import { saveAs } from "file-saver";
 import { ChevronDown, ChevronUp, Globe, AlertCircle, PauseCircle, PlayCircle, StopCircle, X, Maximize, Minimize, Eye, EyeOff } from "lucide-react";
 import { useI18n } from "@/lib/i18n/I18nContext";
 import SubtitlePreview from "@/components/SubtitlePreview";
+import { 
+  parseSubtitle, 
+  stringifySubtitle, 
+  detectFormat, 
+  getAcceptAttribute, 
+  getFileExtension,
+  SubtitleFormat,
+  SubtitleItem as SubtitleItemBase,
+  getSupportedExtensions
+} from '@/lib/subtitleUtils';
+import { 
+  trackFileUpload, 
+  trackTranslation, 
+  trackExport, 
+  trackError,
+  trackEvent
+} from '@/lib/analytics';
 
 // Define subtitle item interface
-export interface SubtitleItem {
-    id: number;
-    startTime: string;
-    endTime: string;
-    text: string;
+export interface SubtitleItem extends SubtitleItemBase {
     translatedText: string;
     status: "pending" | "translating" | "translated" | "error";
     error?: string;
@@ -75,6 +87,8 @@ export default function SubtitleTranslator() {
     const [currentTranslatingItemId, setCurrentTranslatingItemId] = useState<number | null>(null);
     const [alertMessage, setAlertMessage] = useState<string | null>(null);
     const [showAlert, setShowAlert] = useState<boolean>(false);
+    const [subtitleFormat, setSubtitleFormat] = useState<SubtitleFormat>('srt');
+    const [exportFormat, setExportFormat] = useState<SubtitleFormat | 'original'>('original');
 
     // Cập nhật pauseStateRef khi isPaused thay đổi
     useEffect(() => {
@@ -194,8 +208,9 @@ export default function SubtitleTranslator() {
 
     // Process the selected/dropped file
     const processFile = async (selectedFile: File) => {
-        // Check if file is an SRT file
-        if (!selectedFile.name.toLowerCase().endsWith('.srt')) {
+        // Kiểm tra xem file có phải là một định dạng phụ đề được hỗ trợ
+        const format = detectFormat(selectedFile.name);
+        if (!format) {
             setValidationError(t('fileUpload.invalidFormat'));
             return;
         }
@@ -204,25 +219,30 @@ export default function SubtitleTranslator() {
         setFileName(selectedFile.name);
         setTranslationProgress(0);
         setValidationError(null);
+        setSubtitleFormat(format);
 
         try {
             const content = await selectedFile.text();
-            const parsedSubtitles = parse(content);
+            const parsedSubtitles = parseSubtitle(content, format);
 
             // Initialize subtitle items with status
-            const subtitleItems: SubtitleItem[] = parsedSubtitles.map((sub: ParsedSubtitle, index: number) => ({
+            const subtitleItems: SubtitleItem[] = parsedSubtitles.map((sub: SubtitleItemBase, index: number) => ({
+                ...sub,
                 id: index + 1,
-                startTime: sub.startTime,
-                endTime: sub.endTime,
-                text: sub.text,
                 translatedText: "",
                 status: "pending"
             }));
 
             setSubtitles(subtitleItems);
+            
+            // Theo dõi sự kiện tải file
+            trackFileUpload(format, selectedFile.size);
         } catch (error) {
-            console.error("Error parsing the SRT file:", error);
+            console.error(`Error parsing the ${format.toUpperCase()} file:`, error);
             setValidationError(t('fileUpload.invalidFormat'));
+            
+            // Theo dõi lỗi
+            trackError('file_parsing', `Error parsing ${format} file: ${error instanceof Error ? error.message : String(error)}`);
         }
     };
 
@@ -286,8 +306,9 @@ export default function SubtitleTranslator() {
         if (droppedFiles.length > 0) {
             const file = droppedFiles[0];
 
-            // Kiểm tra xem file có phải là file SRT không
-            if (file.name.toLowerCase().endsWith('.srt')) {
+            // Kiểm tra xem file có phải là định dạng được hỗ trợ không
+            const format = detectFormat(file.name);
+            if (format) {
                 processFile(file);
             } else {
                 setValidationError(t('fileUpload.invalidFormat'));
@@ -318,6 +339,9 @@ export default function SubtitleTranslator() {
         setIsPaused(false);
         pauseStateRef.current = false;
         setTranslationError(null); // Reset thông báo lỗi dịch
+
+        // Theo dõi sự kiện bắt đầu dịch
+        trackTranslation('auto', targetLanguage, subtitles.length, selectedModel);
 
         // Tạo abort controller mới
         abortControllerRef.current = new AbortController();
@@ -585,14 +609,45 @@ export default function SubtitleTranslator() {
             // Mark all items in the batch as failed
             updateBatchStatus(batch, "error", error instanceof Error ? error.message : "Translation failed");
 
+            // Tính toán batch index chính xác
+            const firstSubtitleId = batch[0]?.id || 0;
+            const actualBatchIndex = Math.floor((firstSubtitleId - 1) / BATCH_SIZE);
+
             // Add to failed batches
-            setFailedBatches(prev => [...prev, { index: batch[0].id, items: [...batch] }]);
+            setFailedBatches(prev => {
+                // Kiểm tra xem batch này đã tồn tại trong failedBatches chưa
+                const batchExists = prev.some(existingBatch => {
+                    if (!existingBatch.items.length) return false;
+                    
+                    const existingFirstId = existingBatch.items[0]?.id;
+                    const existingBatchIndex = Math.floor((existingFirstId - 1) / BATCH_SIZE);
+                    
+                    return existingBatchIndex === actualBatchIndex;
+                });
+                
+                // Chỉ thêm vào nếu batch chưa tồn tại
+                if (!batchExists) {
+                    return [...prev, { index: actualBatchIndex, items: [...batch] }];
+                }
+                
+                return prev;
+            });
 
             // Update progress
             setTranslationProgress(prev => {
                 const totalCompleted = subtitles.filter(s => s.status === "translated" || s.status === "error").length;
                 return Math.floor((totalCompleted / subtitles.length) * 100);
             });
+
+            // Theo dõi lỗi dịch
+            trackError('translation_batch', 
+                error instanceof Error ? error.message : String(error), 
+                { 
+                    batchIndex: batch[0].id, 
+                    subtitleCount: batch.length, 
+                    targetLanguage 
+                }
+            );
         }
     };
 
@@ -681,36 +736,51 @@ export default function SubtitleTranslator() {
                 ? error.message
                 : "Failed to translate";
             setSubtitles([...updatedSubtitles]);
+
+            // Theo dõi lỗi thử lại
+            trackError('retry_subtitle', 
+                error instanceof Error ? error.message : String(error), 
+                { subtitleId: id }
+            );
         }
     };
 
-    // Export translated subtitles as SRT file
+    // Export translated subtitles
     const handleExport = () => {
         if (!window || subtitles.length === 0 || !fileName) return;
 
-        // Create SRT content with translations
-        const srtContent = stringify(subtitles.map(sub => ({
+        // Sử dụng định dạng được chọn cho xuất
+        const formatToUse = exportFormat === 'original' ? subtitleFormat : exportFormat;
+
+        // Create subtitle content with translations
+        const exportContent = stringifySubtitle(subtitles.map(sub => ({
             id: sub.id,
             startTime: sub.startTime,
             endTime: sub.endTime,
             text: sub.translatedText || sub.text // Use original text as fallback if translation is missing
-        })));
+        })), formatToUse);
 
         // Generate file name with language indication
-        const origName = fileName.replace(/\.srt$/i, '');
-        const newFileName = `${origName}_${targetLanguage.toLowerCase()}.srt`;
+        const origName = fileName.replace(new RegExp(`\\.${subtitleFormat}$`, 'i'), '');
+        const newFileName = `${origName}_${targetLanguage.toLowerCase()}${getFileExtension(formatToUse)}`;
 
         // Create and download the file
-        const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
         saveAs(blob, newFileName);
+        
+        // Theo dõi sự kiện xuất file
+        trackExport(formatToUse, subtitles.length, targetLanguage, false);
     };
 
     // Export bilingual subtitles (original + translated)
     const handleExportBilingual = () => {
         if (!window || subtitles.length === 0 || !fileName) return;
 
-        // Create SRT content with both original and translated text
-        const srtContent = stringify(subtitles.map(sub => {
+        // Sử dụng định dạng được chọn cho xuất
+        const formatToUse = exportFormat === 'original' ? subtitleFormat : exportFormat;
+
+        // Create subtitle content with both original and translated text
+        const exportContent = stringifySubtitle(subtitles.map(sub => {
             // Skip subtitles that haven't been translated yet
             if (sub.status !== "translated" || !sub.translatedText) {
                 return {
@@ -728,15 +798,18 @@ export default function SubtitleTranslator() {
                 endTime: sub.endTime,
                 text: `${sub.text}\n${sub.translatedText}`
             };
-        }));
+        }), formatToUse);
 
         // Generate file name for bilingual version
-        const origName = fileName.replace(/\.srt$/i, '');
-        const newFileName = `${origName}_bilingual_${targetLanguage.toLowerCase()}.srt`;
+        const origName = fileName.replace(new RegExp(`\\.${subtitleFormat}$`, 'i'), '');
+        const newFileName = `${origName}_bilingual_${targetLanguage.toLowerCase()}${getFileExtension(formatToUse)}`;
 
         // Create and download the file
-        const blob = new Blob([srtContent], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([exportContent], { type: 'text/plain;charset=utf-8' });
         saveAs(blob, newFileName);
+        
+        // Theo dõi sự kiện xuất file song ngữ
+        trackExport(formatToUse, subtitles.length, targetLanguage, true);
     };
 
     // Update subtitle manually
@@ -750,12 +823,87 @@ export default function SubtitleTranslator() {
         );
     };
 
+    // Làm mới danh sách các batch lỗi
+    const refreshFailedBatches = () => {
+        // Lọc lại các batch lỗi dựa trên trạng thái hiện tại của subtitles
+        const errorBatches: { [key: number]: SubtitleItem[] } = {};
+        
+        // Nhóm các subtitle lỗi theo batch
+        subtitles.forEach(sub => {
+            if (sub.status === "error") {
+                const batchIndex = Math.floor((sub.id - 1) / BATCH_SIZE);
+                if (!errorBatches[batchIndex]) {
+                    errorBatches[batchIndex] = [];
+                }
+                errorBatches[batchIndex].push(sub);
+            }
+        });
+        
+        // Chuyển đổi sang định dạng mảng failedBatches
+        const newFailedBatches = Object.entries(errorBatches).map(([batchIndex, items]) => ({
+            index: parseInt(batchIndex),
+            items
+        }));
+        
+        // Cập nhật state nếu có sự thay đổi
+        if (JSON.stringify(newFailedBatches.map(b => b.index)) !== 
+            JSON.stringify(failedBatches.map(b => b.index))) {
+            setFailedBatches(newFailedBatches);
+        }
+    };
+
     // Retry a batch of subtitles
     const handleRetryBatch = async (batchIndex: number) => {
-        const batchToRetry = failedBatches.find(batch => batch.index === batchIndex);
-        if (!batchToRetry) return;
+        console.log(`Starting retry for batch ${batchIndex}`);
+        
+        // Làm mới danh sách batch lỗi trước khi thử tìm
+        refreshFailedBatches();
+        
+        // Kiểm tra xem có batch lỗi nào không
+        if (!failedBatches || failedBatches.length === 0) {
+            console.warn("Không có batch lỗi nào để thử lại");
+            return Promise.resolve(); // Trả về resolved promise để không gây lỗi UI
+        }
+
+        // Log danh sách failedBatches hiện tại để debug
+        console.log("Current failedBatches:", failedBatches.map(b => ({
+            index: b.index,
+            firstId: b.items[0]?.id,
+            calculatedIndex: Math.floor((b.items[0]?.id - 1) / BATCH_SIZE)
+        })));
+
+        // Tìm batch từ mảng failedBatches dựa vào batchIndex
+        // Chú ý: batchIndex là vị trí của batch, nhưng batch.index có thể không trùng khớp
+        const batchToRetry = failedBatches.find(batch => {
+            if (!batch || batch.items.length === 0) return false;
+            
+            const firstItemId = batch.items[0]?.id;
+            const calculatedIndex = Math.floor((firstItemId - 1) / BATCH_SIZE);
+            
+            // So sánh trực tiếp calculated index với batchIndex được truyền vào
+            return calculatedIndex === batchIndex;
+        });
+        
+        if (!batchToRetry) {
+            console.warn(`Batch với index ${batchIndex} không tìm thấy trong danh sách failedBatches`);
+            
+            // Cập nhật lại UI để không hiển thị các batch không còn tồn tại
+            const batchExists = subtitles.some(sub => {
+                const subBatchIndex = Math.floor((sub.id - 1) / BATCH_SIZE);
+                return subBatchIndex === batchIndex && sub.status === "error";
+            });
+            
+            if (!batchExists) {
+                console.log("Batch không còn lỗi trong danh sách subtitles, cập nhật UI");
+                // Refresh UI nếu cần
+            }
+            
+            return Promise.resolve(); // Trả về resolved promise để không gây lỗi UI
+        }
 
         const updatedSubtitles = [...subtitles];
+
+        console.log(`Retrying batch ${batchIndex} with ${batchToRetry.items.length} items`);
 
         // Update status to translating for all subtitles in this batch
         batchToRetry.items.forEach(item => {
@@ -773,12 +921,35 @@ export default function SubtitleTranslator() {
         }
 
         try {
+            // Track analytics for retry batch
+            trackEvent('retry_batch', { 
+                batchIndex, 
+                itemCount: batchToRetry.items.length,
+            });
+
             // Process the batch
             await processBatchWithContext(batchToRetry.items, updatedSubtitles);
 
             // If successful, remove this batch from failedBatches
-            setFailedBatches(prev => prev.filter(batch => batch.index !== batchIndex));
+            setFailedBatches(prev => {
+                // Lọc các batch không thuộc về batchIndex hiện tại
+                return prev.filter(batch => {
+                    // Kiểm tra xem batch này có phải là batch chúng ta vừa retry không
+                    // bằng cách so sánh ID của item đầu tiên
+                    if (!batch || batch.items.length === 0) return true; // giữ lại các batch rỗng (hiếm khi xảy ra)
+                    
+                    // Dựa vào firstItemId để xác định batch
+                    const firstItemIdOfBatch = batch.items[0].id;
+                    const firstItemIdOfRetried = batchToRetry.items[0].id;
+                    
+                    // Giữ lại các batch khác với batch vừa retry
+                    return firstItemIdOfBatch !== firstItemIdOfRetried;
+                });
+            });
 
+            // Làm mới danh sách các batch lỗi để đảm bảo tính nhất quán
+            setTimeout(refreshFailedBatches, 500);
+            
             return Promise.resolve();
         } catch (error) {
             console.error(`Error retrying batch ${batchIndex}:`, error);
@@ -790,22 +961,51 @@ export default function SubtitleTranslator() {
 
             // Update error message but keep batch in failed batches
             setFailedBatches(prev =>
-                prev.map(batch =>
-                    batch.index === batchIndex
-                        ? {
+                prev.map(batch => {
+                    // Kiểm tra xem batch này có phải là batch chúng ta vừa retry không
+                    // bằng cách so sánh ID của item đầu tiên
+                    if (!batch || batch.items.length === 0) return batch; // giữ nguyên các batch rỗng
+                    
+                    // Dựa vào firstItemId để xác định batch
+                    const firstItemIdOfBatch = batch.items[0].id;
+                    const firstItemIdOfRetried = batchToRetry.items[0].id;
+                    
+                    // Nếu đây là batch đang retry, cập nhật thông báo lỗi
+                    if (firstItemIdOfBatch === firstItemIdOfRetried) {
+                        return {
                             ...batch,
                             items: batch.items.map(item => ({
                                 ...item,
                                 error: error instanceof Error ? error.message : "Failed to translate after retry"
                             }))
-                        }
-                        : batch
-                )
+                        };
+                    }
+                    
+                    // Giữ nguyên các batch khác
+                    return batch;
+                })
             );
 
+            // Track error for analytics
+            trackError('retry_batch_failed', 
+                error instanceof Error ? error.message : String(error),
+                { batchIndex }
+            );
+
+            // Làm mới danh sách các batch lỗi để đảm bảo tính nhất quán
+            setTimeout(refreshFailedBatches, 500);
+            
             return Promise.reject(error);
         }
     };
+
+    // Thêm effect để làm mới danh sách failedBatches khi subtitles thay đổi
+    useEffect(() => {
+        if (subtitles.length > 0) {
+            // Làm mới khi subtitles thay đổi để cập nhật danh sách batch lỗi
+            refreshFailedBatches();
+        }
+    }, [subtitles]); // Phụ thuộc vào toàn bộ subtitles để cập nhật khi có thay đổi trạng thái
 
     // Thêm hàm xử lý gợi ý dịch thuật
     const handleSuggestBetterTranslation = async (id: number, originalText: string, currentTranslation: string) => {
@@ -830,7 +1030,7 @@ Yêu cầu cụ thể cho mỗi phiên bản:
 
 2. PHIÊN BẢN HỌC THUẬT: Sát nghĩa với văn bản gốc, sử dụng thuật ngữ chính xác và ngôn ngữ trang trọng. Diễn đạt chặt chẽ về mặt ngữ nghĩa và cú pháp.
 
-3. PHIÊN BẢN SÁNG TẠO: Tự do hơn về mặt diễn đạt, có thể dùng thành ngữ, cách nói địa phương hoặc biểu đạt hiện đại. Truyền tải không chỉ nội dung mà còn cảm xúc và tinh thần của văn bản gốc.
+3. PHIÊN BẢN SÁNG TẠO: Tự do hơn về mặt diễn đạt, có thể dùng thành ngữ, cách nói địa phương hoặc biểu đạt hiện đại. Truyền tải không chỉ nội dung mà cả cảm xúc và tinh thần của văn bản gốc.
 
 Đảm bảo ba phiên bản phải ĐỦ KHÁC BIỆT để người dùng có những lựa chọn đa dạng. Trả về chính xác 3 phiên bản, mỗi phiên bản trên một dòng, không có đánh số, không có giải thích.`;
 
@@ -952,7 +1152,7 @@ Yêu cầu cụ thể cho mỗi phiên bản:
                                                         <input
                                                             ref={fileInputRef}
                                                             type="file"
-                                                            accept=".srt"
+                                                            accept={getAcceptAttribute()}
                                                             className="hidden"
                                                             onChange={handleFileChange}
                                                             disabled={translating}
@@ -972,7 +1172,8 @@ Yêu cầu cụ thể cho mỗi phiên bản:
                                                     {file && (
                                                         <div className="flex justify-between items-center text-sm p-2 bg-gray-50 rounded">
                                                             <div className="truncate">
-                                                                <span className="font-medium">{t('fileUpload.fileSelected')}</span> {fileName}
+                                                                <div className="font-medium">{t('fileUpload.fileSelected')} {fileName}</div>
+                                                                <div className="text-xs text-gray-500">{formatParams(t('fileUpload.formatDetected'), { format: subtitleFormat.toUpperCase() })}</div>
                                                             </div>
                                                             <Button
                                                                 variant="ghost"
@@ -1211,26 +1412,45 @@ Yêu cầu cụ thể cho mỗi phiên bản:
                                                     >
                                                         {isSubtitleTableCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                                                     </Button>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={handleExport}
-                                                            disabled={!subtitles.some(s => s.status === "translated")}
-                                                            title={t('export.exportTranslated')}
-                                                        >
-                                                            {t('export.exportTranslated')}
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={handleExportBilingual}
-                                                            disabled={!subtitles.some(s => s.status === "translated")}
-                                                            title={t('export.bilingualDescription')}
-                                                            className="whitespace-nowrap"
-                                                        >
-                                                            {t('export.exportBilingual')}
-                                                        </Button>
+                                                    <div className="flex flex-col gap-2">
+                                                        {/* Format selection */}
+                                                        <div className="flex items-center gap-2">
+                                                            <label className="text-xs text-gray-500">{t('export.exportFormat')}</label>
+                                                            <select 
+                                                                value={exportFormat}
+                                                                onChange={(e) => setExportFormat(e.target.value as SubtitleFormat | 'original')}
+                                                                className="text-xs border rounded px-1 py-0.5 bg-white"
+                                                                disabled={!subtitles.some(s => s.status === "translated")}
+                                                            >
+                                                                <option value="original">{t('export.keepOriginalFormat')} ({subtitleFormat.toUpperCase()})</option>
+                                                                <option value="srt">SRT</option>
+                                                                <option value="vtt">WebVTT</option>
+                                                                <option value="ass">ASS</option>
+                                                            </select>
+                                                        </div>
+                                                        
+                                                        {/* Export buttons */}
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={handleExport}
+                                                                disabled={!subtitles.some(s => s.status === "translated")}
+                                                                title={t('export.exportTranslated')}
+                                                            >
+                                                                {t('export.exportTranslated')}
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={handleExportBilingual}
+                                                                disabled={!subtitles.some(s => s.status === "translated")}
+                                                                title={t('export.bilingualDescription')}
+                                                                className="whitespace-nowrap"
+                                                            >
+                                                                {t('export.exportBilingual')}
+                                                            </Button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}

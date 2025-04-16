@@ -37,22 +37,24 @@ const en = {
     validating: "Validating..."
   },
   fileUpload: {
-    title: "Upload SRT File",
-    description: "Select an SRT subtitle file to translate",
-    dragAndDrop: "Drag and drop an SRT file here, or click to select",
-    dropFileHere: "Drop your SRT file here...",
-    dragAndDropHere: "Drag and drop your SRT file here",
+    title: "Upload Subtitle File",
+    description: "Select an SRT, VTT, or ASS subtitle file to translate",
+    dragAndDrop: "Drag and drop a subtitle file here, or click to select",
+    dropFileHere: "Drop your subtitle file here...",
+    dragAndDropHere: "Drag and drop your subtitle file here",
     orClickToSelect: "or click to select",
     browsing: "Browsing...",
     selectFile: "Select File",
     fileSelected: "File selected:",
     clearFile: "Clear file",
-    invalidFormat: "Invalid file format. Please select an SRT file.",
+    invalidFormat: "Invalid file format. Please select an SRT, VTT, or ASS file.",
     noFileSelected: "No file selected",
     processingFile: "Processing file...",
     successfullyParsed: "Successfully parsed {count} subtitles.",
-    invalidFileType: "Invalid file type. Please select a .srt file.",
-    errorReadingFile: "Error reading file. Please try again."
+    invalidFileType: "Invalid file type. Please select a .srt, .vtt, or .ass file.",
+    errorReadingFile: "Error reading file. Please try again.",
+    formatDetected: "Format detected: {format}",
+    supportedFormats: "Supported formats: SRT, VTT, ASS"
   },
   translationSettings: {
     title: "Translation Settings",
@@ -108,11 +110,13 @@ const en = {
     translationSuggestionFailed: "Could not generate AI suggestions. Please try again."
   },
   export: {
-    exportTranslated: "Export Translated SRT",
-    exportBilingual: "Export Bilingual SRT",
-    bilingualDescription: "Export SRT with both original and translated subtitles",
+    exportTranslated: "Export Translated Subtitle",
+    exportBilingual: "Export Bilingual Subtitle",
+    bilingualDescription: "Export subtitle file with both original and translated subtitles",
     downloading: "Downloading...",
-    noTranslatedSubtitles: "No translated subtitles to export."
+    noTranslatedSubtitles: "No translated subtitles to export.",
+    exportFormat: "Export format:",
+    keepOriginalFormat: "Keep original format"
   },
   preview: {
     title: "Video Preview",

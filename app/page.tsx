@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import TranslatorSkeleton from '@/components/TranslatorSkeleton';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import { useI18n } from '@/lib/i18n/I18nContext';
+import { useSessionTracking } from '@/lib/analytics';
 
 // Import the SubtitleTranslator component dynamically with SSR disabled
 const SubtitleTranslator = dynamic(
@@ -16,6 +17,9 @@ const SubtitleTranslator = dynamic(
 
 export default function Home() {
   const { t } = useI18n();
+  
+  // Kích hoạt theo dõi phiên làm việc
+  useSessionTracking();
   
   return (
     <>

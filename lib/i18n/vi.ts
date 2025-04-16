@@ -37,22 +37,24 @@ const vi = {
     validating: "Đang xác thực..."
   },
   fileUpload: {
-    title: "Tải lên tệp SRT",
-    description: "Chọn tệp phụ đề SRT để dịch",
-    dragAndDrop: "Kéo và thả tệp SRT vào đây, hoặc nhấp để chọn",
-    dropFileHere: "Thả tệp SRT của bạn vào đây...",
-    dragAndDropHere: "Kéo và thả tệp SRT của bạn vào đây",
+    title: "Tải lên tệp phụ đề",
+    description: "Chọn tệp phụ đề SRT, VTT, hoặc ASS để dịch",
+    dragAndDrop: "Kéo và thả tệp phụ đề vào đây, hoặc nhấp để chọn",
+    dropFileHere: "Thả tệp phụ đề của bạn vào đây...",
+    dragAndDropHere: "Kéo và thả tệp phụ đề của bạn vào đây",
     orClickToSelect: "hoặc nhấp để chọn",
     browsing: "Đang duyệt...",
     selectFile: "Chọn tệp",
     fileSelected: "Đã chọn tệp:",
     clearFile: "Xóa tệp",
-    invalidFormat: "Định dạng tệp không hợp lệ. Vui lòng chọn tệp SRT.",
+    invalidFormat: "Định dạng tệp không hợp lệ. Vui lòng chọn tệp SRT, VTT, hoặc ASS.",
     noFileSelected: "Chưa chọn tệp",
     processingFile: "Đang xử lý tệp...",
     successfullyParsed: "Đã phân tích thành công {count} phụ đề.",
-    invalidFileType: "Loại tệp không hợp lệ. Vui lòng chọn tệp .srt.",
-    errorReadingFile: "Lỗi đọc tệp. Vui lòng thử lại."
+    invalidFileType: "Loại tệp không hợp lệ. Vui lòng chọn tệp .srt, .vtt, hoặc .ass.",
+    errorReadingFile: "Lỗi đọc tệp. Vui lòng thử lại.",
+    formatDetected: "Đã phát hiện định dạng: {format}",
+    supportedFormats: "Định dạng hỗ trợ: SRT, VTT, ASS"
   },
   translationSettings: {
     title: "Cài đặt dịch",
@@ -108,11 +110,13 @@ const vi = {
     translationSuggestionFailed: "Không thể tạo gợi ý từ AI. Vui lòng thử lại."
   },
   export: {
-    exportTranslated: "Xuất SRT đã dịch",
+    exportTranslated: "Xuất phụ đề đã dịch",
     exportBilingual: "Xuất phụ đề song ngữ",
-    bilingualDescription: "Xuất file SRT bao gồm cả phụ đề gốc và bản dịch",
+    bilingualDescription: "Xuất file phụ đề bao gồm cả phụ đề gốc và bản dịch",
     downloading: "Đang tải xuống...",
-    noTranslatedSubtitles: "Không có phụ đề đã dịch để xuất."
+    noTranslatedSubtitles: "Không có phụ đề đã dịch để xuất.",
+    exportFormat: "Định dạng xuất:",
+    keepOriginalFormat: "Giữ định dạng gốc"
   },
   preview: {
     title: "Xem trước video",

@@ -17,106 +17,6 @@ export const translations = {
     vi: "Chọn mô hình",
     en: "Select model"
   },
-  capabilities: {
-    vi: "Khả năng",
-    en: "Capabilities"
-  },
-  optimizedFor: {
-    vi: "Tối ưu cho",
-    en: "Optimized for"
-  },
-  priceCategory: {
-    free: {
-      vi: "Miễn phí",
-      en: "Free"
-    },
-    paid: {
-      vi: "Trả phí",
-      en: "Paid"
-    },
-    experimental: {
-      vi: "Thử nghiệm",
-      en: "Experimental"
-    }
-  },
-  tierLabel: {
-    freeTier: {
-      vi: "Miễn phí (Free Tier)",
-      en: "Free Tier"
-    },
-    paidTier: {
-      vi: "Trả phí (Paid Tier)",
-      en: "Paid Tier"
-    }
-  },
-  capabilityLabels: {
-    audio: {
-      vi: "Âm thanh",
-      en: "Audio"
-    },
-    image: {
-      vi: "Hình ảnh",
-      en: "Image"
-    },
-    video: {
-      vi: "Video",
-      en: "Video"
-    },
-    text: {
-      vi: "Văn bản",
-      en: "Text"
-    }
-  },
-  optimizationLabels: {
-    reasoning: {
-      vi: "Suy luận",
-      en: "Reasoning"
-    },
-    multimodal: {
-      vi: "Đa phương thức",
-      en: "Multimodal"
-    },
-    programming: {
-      vi: "Lập trình",
-      en: "Programming"
-    },
-    speed: {
-      vi: "Tốc độ",
-      en: "Speed"
-    },
-    "real-time": {
-      vi: "Thời gian thực",
-      en: "Real-time"
-    },
-    cost: {
-      vi: "Chi phí thấp",
-      en: "Cost-effective"
-    },
-    latency: {
-      vi: "Độ trễ thấp",
-      en: "Low latency"
-    },
-    versatility: {
-      vi: "Đa năng",
-      en: "Versatility"
-    },
-    volume: {
-      vi: "Khối lượng lớn",
-      en: "High volume"
-    },
-    "simple-tasks": {
-      vi: "Tác vụ đơn giản",
-      en: "Simple tasks"
-    },
-    "complex-reasoning": {
-      vi: "Suy luận phức tạp",
-      en: "Complex reasoning"
-    },
-    "context-awareness": {
-      vi: "Hiểu ngữ cảnh",
-      en: "Context awareness"
-    }
-  }
 }
 
 export interface ModelOption {
@@ -126,9 +26,6 @@ export interface ModelOption {
     vi: string;
     en: string;
   };
-  capabilities: string[];
-  optimizedFor: string[];
-  priceCategory: string;
 }
 
 // Danh sách các model có sẵn hỗ trợ dịch thuật text-to-text
@@ -139,10 +36,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     description: {
       vi: "Mô hình tiên tiến nhất, phù hợp cho dịch thuật chất lượng cao",
       en: "Most advanced model, suitable for high-quality translations"
-    },
-    capabilities: ["audio", "image", "video", "text"],
-    optimizedFor: ["reasoning", "multimodal", "programming"],
-    priceCategory: "free"
+    }
   },
   {
     id: "gemini-2.0-flash",
@@ -150,10 +44,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     description: {
       vi: "Hiệu suất nhanh và cân bằng, phù hợp cho dịch thuật thông thường",
       en: "Fast and balanced performance, suitable for routine translations"
-    },
-    capabilities: ["audio", "image", "video", "text"],
-    optimizedFor: ["speed", "reasoning", "real-time"],
-    priceCategory: "free"
+    }
   }
 ];
 
@@ -190,19 +81,6 @@ export default function ModelSelector({ onModelChange, className = "" }: ModelSe
   
   // Xác định ngôn ngữ hiển thị, mặc định là tiếng Việt nếu không có
   const currentLanguage = locale === 'en' ? 'en' : 'vi';
-
-  // Hàm lấy nhãn theo ngôn ngữ
-  const getCapabilityLabel = (capability: string) => {
-    return translations.capabilityLabels[capability as keyof typeof translations.capabilityLabels]?.[currentLanguage] || capability;
-  };
-
-  const getOptimizationLabel = (optimization: string) => {
-    return translations.optimizationLabels[optimization as keyof typeof translations.optimizationLabels]?.[currentLanguage] || optimization;
-  };
-
-  const getPriceCategoryLabel = (category: string) => {
-    return translations.priceCategory[category as keyof typeof translations.priceCategory]?.[currentLanguage] || category;
-  };
 
   // Nhóm các mô hình theo loại giá - không cần phân nhóm nữa
   const models = AVAILABLE_MODELS;
