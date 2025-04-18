@@ -30,10 +30,10 @@ export default function Home() {
         <div className="container max-w-6xl mx-auto px-4 py-3.5 flex justify-between items-center">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-800 transition-colors">
-              {t('common.appTitle')}
+              TungSoiSub
             </h1>
             <p className="text-sm text-gray-600 mt-0.5 transition-colors">
-              {t('common.appDescription')}
+              Chào mừng đến với thế giới phụ đề của Tung Soi
             </p>
             <p className="text-sm text-gray-700 mt-2">
   🔥 Xin chào! Đây là công cụ dịch phụ đề cá nhân của mình – <strong>Tung Soi</strong>.<br />
