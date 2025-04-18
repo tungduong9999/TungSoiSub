@@ -33,7 +33,7 @@ export default function Home() {
               TungSoiSub
             </h1>
             <p className="text-sm text-gray-600 mt-0.5 transition-colors">
-              Chào mừng đến với thế giới phụ đề của Tung Soi
+              Nơi biến ước mơ trở thành hiện thực 🔥🔥🔥🔥🔥
             </p>
             <p className="text-sm text-gray-700 mt-2">
   🔥 Xin chào! Đây là công cụ dịch phụ đề cá nhân của mình – <strong>Tung Soi</strong>.<br />
