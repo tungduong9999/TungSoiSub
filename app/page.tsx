@@ -35,6 +35,11 @@ export default function Home() {
             <p className="text-sm text-gray-600 mt-0.5 transition-colors">
               {t('common.appDescription')}
             </p>
+            <p className="text-sm text-gray-700 mt-2">
+  🔥 Xin chào! Đây là công cụ dịch phụ đề cá nhân của mình – <strong>Tung Soi</strong>.<br />
+  Bạn có thể upload file <code>.srt</code>, chọn ngôn ngữ và dịch trong vài giây. Hope you like it! ❤️
+            </p>
+
           </div>
           <div className="ml-4 flex items-center gap-4">
             <Link href="/guide" className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors">

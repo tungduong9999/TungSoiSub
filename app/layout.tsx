@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SubtitleAI",
-  description: "Translate subtitles from SRT files using Gemini AI",
+  title: "TungSoiSub",
+  description: "Chao mung den voi the gioi cua Tung Soi",
 };
 
 export default function RootLayout({
