@@ -36,7 +36,7 @@ export default function Home() {
               Nơi biến ước mơ trở thành hiện thực 🔥🔥🔥🔥🔥
             </p>
             <p className="text-sm text-gray-700 mt-2">
-  🔥 Xin chào! Đây là công cụ dịch phụ đề cá nhân của mình – <strong>Tung Soi</strong>.<br />
+  🔥 Xin chào! Đây là công cụ dịch phụ đề cá nhân của mình – <strong>Dương Quý Tùng</strong>.<br />
   Bạn có thể upload file <code>.srt</code>, chọn ngôn ngữ và dịch trong vài giây. Hope you like it! ❤️
             </p>
 
